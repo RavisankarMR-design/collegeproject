@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: attendance-app
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MONGO_URI
+        sync: false

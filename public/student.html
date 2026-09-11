@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Student — Mark Attendance</title>
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+  <h1>Mark attendance</h1>
+  <p class="subtitle">Scan the QR shown in class. You must be physically in the room — the code checks your location too.</p>
+
+  <div class="card">
+    <label for="rollNo">Roll number</label>
+    <input id="rollNo" placeholder="e.g. 21CS001" autocomplete="off" />
+
+    <label for="name">Full name</label>
+    <input id="name" placeholder="e.g. Jane Doe" autocomplete="off" />
+
+    <button id="scan-btn">Scan classroom QR</button>
+
+    <div class="reader-frame" id="reader-frame" style="display:none;">
+      <div id="reader"></div>
+    </div>
+
+    <label for="qr-file" style="margin-top:14px;">No camera? Upload a photo/screenshot of the QR instead</label>
+    <input type="file" id="qr-file" accept="image/*" />
+
+    <div id="result"></div>
+  </div>
+
+  <p class="footer-note">Protected by rotating token + GPS geofence + device binding</p>
+
+  <script>
+    // Device id derived from stable browser/hardware signals (canvas render +
+    // navigator/screen properties) instead of a random UUID, so clearing
+    // localStorage/private-window no longer resets a student's binding.
+    // ponytail: still a browser fingerprint, not a hardware ID — a different
+    // browser or a fingerprint-spoofing extension still gets a new id. Real
+    // hardware ID (Android/iOS) needs a native app; see Phase 2.
+    async function getDeviceId() {
+      const cached = localStorage.getItem('device_id');
+      if (cached) return cached;
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.fillText('device-fingerprint', 2, 2);
+      const canvasData = canvas.toDataURL();
+
+      const raw = [
+        navigator.userAgent,
+        navigator.hardwareConcurrency,
+        navigator.language,
+        screen.width, screen.height, screen.colorDepth,
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+        canvasData,
+      ].join('|');
+
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+      const id = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+      localStorage.setItem('device_id', id);
+      return id;
+    }
+
+    let scanner = null;
+
+    function setBusy(busy, label) {
+      const btn = document.getElementById('scan-btn');
+      btn.disabled = busy;
+      btn.innerHTML = busy ? `<span class="spinner"></span>${label}` : 'Scan classroom QR';
+    }
+
+    document.getElementById('scan-btn').onclick = () => {
+      const rollNo = document.getElementById('rollNo').value.trim();
+      const name = document.getElementById('name').value.trim();
+      if (!rollNo || !name) { showMsg('Enter your roll number and name first.', false); return; }
+
+      setBusy(true, 'Opening camera...');
+      document.getElementById('reader-frame').style.display = 'block';
+      document.getElementById('result').innerHTML = '';
+
+      scanner = new Html5Qrcode('reader');
+      scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: 220 },
+        async (decodedText) => {
+          await scanner.stop();
+          scanner.clear();
+          document.getElementById('reader-frame').style.display = 'none';
+          handleScan(decodedText, rollNo, name);
+        },
+        () => {} // ignore per-frame scan failures
+      ).catch((err) => {
+        document.getElementById('reader-frame').style.display = 'none';
+        showMsg('Could not access camera: ' + (err && err.message ? err.message : err), false);
+        setBusy(false);
+      });
+    };
+
+    document.getElementById('qr-file').onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const rollNo = document.getElementById('rollNo').value.trim();
+      const name = document.getElementById('name').value.trim();
+      if (!rollNo || !name) { showMsg('Enter your roll number and name first.', false); e.target.value = ''; return; }
+
+      setBusy(true, 'Reading QR image...');
+      document.getElementById('result').innerHTML = '';
+      const fileScanner = new Html5Qrcode('reader');
+      try {
+        const decodedText = await fileScanner.scanFile(file, false);
+        handleScan(decodedText, rollNo, name);
+      } catch (err) {
+        showMsg('Could not read a QR code from that image: ' + (err && err.message ? err.message : err), false);
+        setBusy(false);
+      }
+      e.target.value = '';
+    };
+
+    function showMsg(text, ok) {
+      const div = document.getElementById('result');
+      div.innerHTML = `<div class="msg ${ok ? 'ok' : 'err'}">${text}</div>`;
+    }
+
+    function handleScan(payload, rollNo, name) {
+      if (!navigator.geolocation) { showMsg('Geolocation not supported on this device.', false); setBusy(false); return; }
+
+      setBusy(true, 'Confirming location...');
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const body = {
+            payload,
+            rollNo,
+            name,
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            deviceId: await getDeviceId(),
+          };
+          const res = await fetch('/api/attendance/mark', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          setBusy(false);
+          if (res.ok) {
+            showMsg(`✓ Marked present — ~${data.distanceMeters}m from classroom center.`, true);
+          } else {
+            showMsg(data.error, false);
+          }
+        },
+        (err) => {
+          showMsg('Location permission is required: ' + err.message, false);
+          setBusy(false);
+        },
+        { enableHighAccuracy: true }
+      );
+    }
+  </script>
+</body>
+</html>

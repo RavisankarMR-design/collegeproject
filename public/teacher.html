@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Teacher — Attendance</title>
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+</head>
+<body>
+  <h1>Start a class session</h1>
+  <p class="subtitle">The QR rotates every 10s and only counts inside the classroom radius.</p>
+
+  <div id="setup" class="card">
+    <label for="subject">Subject</label>
+    <input id="subject" placeholder="e.g. CS301 — Operating Systems" />
+
+    <label for="teacherName">Your name</label>
+    <input id="teacherName" placeholder="e.g. Prof. Rao" />
+
+    <div class="row">
+      <div>
+        <label for="radius">Geofence radius (m)</label>
+        <input id="radius" type="number" placeholder="30" />
+      </div>
+      <div>
+        <label for="duration">Duration (min)</label>
+        <input id="duration" type="number" placeholder="55" />
+      </div>
+    </div>
+
+    <label for="roster">Enrolled roll numbers (optional)</label>
+    <textarea id="roster" placeholder="One per line or comma-separated, e.g.&#10;21CS001, 21CS002, 21CS003&#10;&#10;Leave blank to accept any roll number."></textarea>
+
+    <button id="capture-loc" class="secondary">📍 Capture classroom location — stand in the room, then tap</button>
+    <div id="loc-status" class="msg info" style="display:none;"></div>
+
+    <button id="start-btn" disabled>Start session</button>
+  </div>
+
+  <div id="live" style="display:none;">
+    <div class="card">
+      <div class="row" style="align-items:flex-start;">
+        <div>
+          <h1 id="subject-title" style="margin-bottom:2px;"></h1>
+          <span class="badge neutral" id="radius-badge"></span>
+          <span class="badge neutral" id="roster-badge"></span>
+        </div>
+        <button id="end-btn" class="danger" style="margin-top:0;">End session</button>
+      </div>
+
+      <div id="qr-box">
+        <canvas id="qr-canvas"></canvas>
+        <div class="timer-ring" id="timer-ring" style="--pct:100;">
+          <div class="timer-inner"><span id="timer">10</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="stat-row">
+        <div class="stat">
+          <div class="num" id="count">0</div>
+          <div class="label" id="count-label">Present</div>
+        </div>
+        <div class="stat">
+          <div class="num" id="flagged-count">0</div>
+          <div class="label">Flagged attempts</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Present</h2>
+      <ul id="present-list" class="list"><li class="empty">No one has scanned in yet.</li></ul>
+    </div>
+
+    <div class="card">
+      <h2>Flagged attempts</h2>
+      <ul id="flagged-list" class="list"><li class="empty">Nothing flagged yet.</li></ul>
+    </div>
+  </div>
+
+  <script>
+    let lat = null, lng = null, sessionId = null, windowSeconds = 10, rosterSize = 0;
+
+    const reasonLabel = {
+      outside_geofence: 'Outside classroom',
+      device_mismatch: 'Device mismatch',
+      not_enrolled: 'Not enrolled',
+    };
+
+    document.getElementById('capture-loc').onclick = () => {
+      const el = document.getElementById('loc-status');
+      el.style.display = 'block';
+      el.className = 'msg info';
+      el.textContent = 'Locating...';
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+          el.className = 'msg ok';
+          el.textContent = `Captured: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          document.getElementById('start-btn').disabled = false;
+        },
+        (err) => {
+          el.className = 'msg err';
+          el.textContent = 'Location failed: ' + err.message;
+        },
+        { enableHighAccuracy: true }
+      );
+    };
+
+    document.getElementById('start-btn').onclick = async () => {
+      const subject = document.getElementById('subject').value.trim();
+      const teacherName = document.getElementById('teacherName').value.trim();
+      const radiusMeters = Number(document.getElementById('radius').value) || 30;
+      const durationMinutes = Number(document.getElementById('duration').value) || 55;
+      const roster = document.getElementById('roster').value
+        .split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+
+      if (!subject || !teacherName) { alert('Subject and name are required'); return; }
+
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject, teacherName, lat, lng, radiusMeters, durationMinutes, roster }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error); return; }
+
+      sessionId = data.sessionId;
+      windowSeconds = data.windowSeconds;
+      rosterSize = data.rosterSize;
+
+      document.getElementById('subject-title').textContent = data.subject;
+      document.getElementById('radius-badge').textContent = `📍 ${data.classroom.radiusMeters}m radius`;
+      document.getElementById('roster-badge').textContent = rosterSize > 0 ? `👥 ${rosterSize} enrolled` : '👥 open roster';
+      document.getElementById('count-label').textContent = rosterSize > 0 ? `Present / ${rosterSize}` : 'Present';
+
+      document.getElementById('setup').style.display = 'none';
+      document.getElementById('live').style.display = 'block';
+
+      refreshQR();
+      setInterval(refreshQR, 1000);
+      refreshList();
+      setInterval(refreshList, 3000);
+      refreshFlagged();
+      setInterval(refreshFlagged, 3000);
+    };
+
+    document.getElementById('end-btn').onclick = async () => {
+      if (!confirm('End this session? Students will no longer be able to mark attendance.')) return;
+      await fetch(`/api/sessions/${sessionId}/end`, { method: 'POST' });
+      alert('Session ended.');
+      location.reload();
+    };
+
+    async function refreshQR() {
+      const res = await fetch(`/api/sessions/${sessionId}/current-qr`);
+      const data = await res.json();
+      if (!res.ok) { document.getElementById('timer').textContent = '—'; return; }
+
+      const canvas = document.getElementById('qr-canvas');
+      QRCode.toCanvas(canvas, data.payload, { width: 220 });
+
+      const secondsLeft = Math.ceil(data.msLeftInWindow / 1000);
+      document.getElementById('timer').textContent = secondsLeft + 's';
+      const pct = Math.round((data.msLeftInWindow / (windowSeconds * 1000)) * 100);
+      document.getElementById('timer-ring').style.setProperty('--pct', pct);
+    }
+
+    async function refreshList() {
+      const res = await fetch(`/api/sessions/${sessionId}/attendance`);
+      const records = await res.json();
+      document.getElementById('count').textContent = records.length;
+      const ul = document.getElementById('present-list');
+      if (records.length === 0) {
+        ul.innerHTML = '<li class="empty">No one has scanned in yet.</li>';
+        return;
+      }
+      ul.innerHTML = records.map((r) => `
+        <li>
+          <span class="who">${r.student.rollNo} — ${r.student.name}</span>
+          <span class="when">${new Date(r.markedAt).toLocaleTimeString()}</span>
+        </li>
+      `).join('');
+    }
+
+    async function refreshFlagged() {
+      const res = await fetch(`/api/sessions/${sessionId}/flagged`);
+      const flags = await res.json();
+      document.getElementById('flagged-count').textContent = flags.length;
+      const ul = document.getElementById('flagged-list');
+      if (flags.length === 0) {
+        ul.innerHTML = '<li class="empty">Nothing flagged yet.</li>';
+        return;
+      }
+      ul.innerHTML = flags.map((f) => `
+        <li>
+          <span>
+            <span class="badge err">${reasonLabel[f.reason] || f.reason}</span>
+            <span class="who">${f.rollNo}</span> — ${f.detail}
+          </span>
+          <span class="when">${new Date(f.createdAt).toLocaleTimeString()}</span>
+        </li>
+      `).join('');
+    }
+  </script>
+</body>
+</html>
