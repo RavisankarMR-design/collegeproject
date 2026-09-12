@@ -45,8 +45,12 @@
           <h1 id="subject-title" style="margin-bottom:2px;"></h1>
           <span class="badge neutral" id="radius-badge"></span>
           <span class="badge neutral" id="roster-badge"></span>
+          <span class="badge warn" id="end-time-badge"></span>
         </div>
-        <button id="end-btn" class="danger" style="margin-top:0;">End session</button>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <button id="extend-btn" class="secondary" style="margin-top:0;">+15 min</button>
+          <button id="end-btn" class="danger" style="margin-top:0;">End session</button>
+        </div>
       </div>
 
       <div id="qr-box">
@@ -82,7 +86,13 @@
   </div>
 
   <script>
-    let lat = null, lng = null, sessionId = null, windowSeconds = 10, rosterSize = 0;
+    let lat = null, lng = null, sessionId = null, windowSeconds = 10, rosterSize = 0, sessionEndTime = null;
+
+    function renderEndTimeBadge() {
+      if (!sessionEndTime) return;
+      document.getElementById('end-time-badge').textContent =
+        `⏱ Ends ${sessionEndTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
 
     const reasonLabel = {
       outside_geofence: 'Outside classroom',
@@ -132,11 +142,13 @@
       sessionId = data.sessionId;
       windowSeconds = data.windowSeconds;
       rosterSize = data.rosterSize;
+      sessionEndTime = new Date(data.endTime);
 
       document.getElementById('subject-title').textContent = data.subject;
       document.getElementById('radius-badge').textContent = `📍 ${data.classroom.radiusMeters}m radius`;
       document.getElementById('roster-badge').textContent = rosterSize > 0 ? `👥 ${rosterSize} enrolled` : '👥 open roster';
       document.getElementById('count-label').textContent = rosterSize > 0 ? `Present / ${rosterSize}` : 'Present';
+      renderEndTimeBadge();
 
       document.getElementById('setup').style.display = 'none';
       document.getElementById('live').style.display = 'block';
@@ -147,6 +159,21 @@
       setInterval(refreshList, 3000);
       refreshFlagged();
       setInterval(refreshFlagged, 3000);
+    };
+
+    document.getElementById('extend-btn').onclick = async () => {
+      const btn = document.getElementById('extend-btn');
+      btn.disabled = true;
+      const res = await fetch(`/api/sessions/${sessionId}/extend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minutes: 15 }),
+      });
+      const data = await res.json();
+      btn.disabled = false;
+      if (!res.ok) { alert(data.error); return; }
+      sessionEndTime = new Date(data.endTime);
+      renderEndTimeBadge();
     };
 
     document.getElementById('end-btn').onclick = async () => {

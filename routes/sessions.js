@@ -110,6 +110,25 @@ router.get('/:id/attendance', async (req, res) => {
   }
 });
 
+// Push a live session's end time further out, e.g. class ran long.
+router.post('/:id/extend', async (req, res) => {
+  try {
+    const minutes = Number(req.body.minutes) || 15;
+    const session = await Session.findById(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    // Extend from now if it already ended, otherwise add onto the current end time.
+    const base = Math.max(session.endTime.getTime(), Date.now());
+    session.endTime = new Date(base + minutes * 60000);
+    session.active = true;
+    await session.save();
+
+    res.json({ ok: true, endTime: session.endTime });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/:id/end', async (req, res) => {
   try {
     const session = await Session.findByIdAndUpdate(req.params.id, { active: false }, { new: true });
