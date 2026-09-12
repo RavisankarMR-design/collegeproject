@@ -182,7 +182,7 @@
       ul.innerHTML = records.map((r) => `
         <li>
           <span class="who">${r.student.rollNo} — ${r.student.name}
-            <span class="badge neutral">${r.distanceMeters}m${r.accuracyMeters != null ? ` ±${Math.round(r.accuracyMeters)}m` : ''}</span>
+            <span class="badge neutral">${Math.round(r.distanceMeters)}m${r.accuracyMeters != null ? ` ±${Math.round(r.accuracyMeters)}m` : ''}</span>
           </span>
           <span class="when">${new Date(r.markedAt).toLocaleTimeString()}</span>
         </li>
