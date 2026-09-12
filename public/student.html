@@ -132,6 +132,7 @@
       setBusy(true, 'Confirming location...');
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
+          setBusy(true, `Verifying (GPS accuracy ~${Math.round(pos.coords.accuracy)}m)...`);
           const body = {
             payload,
             rollNo,
