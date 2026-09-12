@@ -181,7 +181,9 @@
       }
       ul.innerHTML = records.map((r) => `
         <li>
-          <span class="who">${r.student.rollNo} — ${r.student.name}</span>
+          <span class="who">${r.student.rollNo} — ${r.student.name}
+            <span class="badge neutral">${r.distanceMeters}m${r.accuracyMeters != null ? ` ±${Math.round(r.accuracyMeters)}m` : ''}</span>
+          </span>
           <span class="when">${new Date(r.markedAt).toLocaleTimeString()}</span>
         </li>
       `).join('');
@@ -200,7 +202,7 @@
         <li>
           <span>
             <span class="badge err">${reasonLabel[f.reason] || f.reason}</span>
-            <span class="who">${f.rollNo}</span> — ${f.detail}
+            <span class="who">${f.rollNo}</span> — ${f.detail}${f.accuracyMeters != null ? ` (GPS ±${Math.round(f.accuracyMeters)}m)` : ''}
           </span>
           <span class="when">${new Date(f.createdAt).toLocaleTimeString()}</span>
         </li>

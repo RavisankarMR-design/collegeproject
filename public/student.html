@@ -138,6 +138,7 @@
             name,
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
             deviceId: await getDeviceId(),
           };
           const res = await fetch('/api/attendance/mark', {
@@ -148,7 +149,7 @@
           const data = await res.json();
           setBusy(false);
           if (res.ok) {
-            showMsg(`✓ Marked present — ~${data.distanceMeters}m from classroom center.`, true);
+            showMsg(`✓ Marked present — ~${data.distanceMeters}m from classroom center (GPS accuracy ~${Math.round(data.accuracyMeters)}m).`, true);
           } else {
             showMsg(data.error, false);
           }

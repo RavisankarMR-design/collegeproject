@@ -15,6 +15,7 @@ const FlaggedAttemptSchema = new mongoose.Schema({
   },
   detail: { type: String, required: true },
   distanceMeters: { type: Number },
+  accuracyMeters: { type: Number, default: null },
   deviceId: { type: String },
   createdAt: { type: Date, default: Date.now },
 });

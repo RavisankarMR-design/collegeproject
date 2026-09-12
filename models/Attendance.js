@@ -5,6 +5,10 @@ const AttendanceSchema = new mongoose.Schema({
   student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
   markedAt: { type: Date, default: Date.now },
   distanceMeters: { type: Number, required: true },
+  // GPS accuracy radius (meters) the browser reported for this fix, so a
+  // "0m from center" reading that was actually a noisy ±40m fix is visible
+  // later instead of looking perfectly precise.
+  accuracyMeters: { type: Number, default: null },
   deviceId: { type: String, required: true },
 });
 
