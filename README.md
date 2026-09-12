@@ -57,3 +57,5 @@ point `MONGO_URI` at it).
 - Admin panel to reset a student's bound device.
 - Socket.io push instead of polling for the live present list.
 - Export attendance as CSV/PDF per session.
+
+Deployed: https://collegeproject-igj6.onrender.com
