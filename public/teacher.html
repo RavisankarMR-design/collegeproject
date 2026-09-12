@@ -48,7 +48,7 @@
           <span class="badge warn" id="end-time-badge"></span>
         </div>
         <div style="display:flex; flex-direction:column; gap:8px;">
-          <button id="extend-btn" class="secondary" style="margin-top:0;">+15 min</button>
+          <button id="extend-btn" class="secondary" style="margin-top:0;">+5 min</button>
           <button id="end-btn" class="danger" style="margin-top:0;">End session</button>
         </div>
       </div>
@@ -167,7 +167,7 @@
       const res = await fetch(`/api/sessions/${sessionId}/extend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ minutes: 15 }),
+        body: JSON.stringify({ minutes: 5 }),
       });
       const data = await res.json();
       btn.disabled = false;
