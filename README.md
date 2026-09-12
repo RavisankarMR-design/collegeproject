@@ -59,3 +59,5 @@ point `MONGO_URI` at it).
 - Export attendance as CSV/PDF per session.
 
 Deployed: https://collegeproject-igj6.onrender.com
+
+Auto-deploy test Sat Sep 12 16:41:15 IST 2026
