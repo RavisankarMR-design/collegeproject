@@ -7,6 +7,35 @@ const { currentWindow, generateToken } = require('../utils/token');
 
 const router = express.Router();
 
+function csvCell(value) {
+  const s = value == null ? '' : String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+// Past + current sessions for the history page, newest first, with how many
+// students were marked present in each. `secret` must never leave the server.
+router.get('/', async (req, res) => {
+  try {
+    const sessions = await Session.find().select('-secret').sort({ startTime: -1 }).limit(100);
+
+    const counts = await Attendance.aggregate([{ $group: { _id: '$session', count: { $sum: 1 } } }]);
+    const countBySession = Object.fromEntries(counts.map((c) => [String(c._id), c.count]));
+
+    res.json(sessions.map((s) => ({
+      sessionId: s._id,
+      subject: s.subject,
+      teacherName: s.teacherName,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      active: s.active,
+      rosterSize: s.roster.length,
+      presentCount: countBySession[String(s._id)] || 0,
+    })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Teacher starts a session. classroom lat/lng is normally captured from the
 // teacher's own device (browser Geolocation API) at the moment class starts.
 // `roster` (optional) is the list of roll numbers enrolled in this class —
@@ -105,6 +134,40 @@ router.get('/:id/attendance', async (req, res) => {
       .populate('student', 'rollNo name')
       .sort({ markedAt: 1 });
     res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Attendance for one session as a downloadable CSV.
+// deviceId is deliberately left out — it's a fingerprint hash the teacher has
+// no use for, and this endpoint is unauthenticated.
+router.get('/:id/export.csv', async (req, res) => {
+  try {
+    const session = await Session.findById(req.params.id).select('-secret');
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    const records = await Attendance.find({ session: session._id })
+      .populate('student', 'rollNo name')
+      .sort({ markedAt: 1 });
+
+    const rows = [
+      ['Roll No', 'Name', 'Marked At', 'Distance (m)', 'GPS Accuracy (m)'],
+      ...records.map((r) => [
+        r.student ? r.student.rollNo : '',
+        r.student ? r.student.name : '',
+        new Date(r.markedAt).toISOString(),
+        Math.round(r.distanceMeters),
+        r.accuracyMeters == null ? '' : Math.round(r.accuracyMeters),
+      ]),
+    ];
+
+    const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n');
+    const filename = `attendance-${session.subject.replace(/[^a-z0-9]+/gi, '-')}-${new Date(session.startTime).toISOString().slice(0, 10)}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

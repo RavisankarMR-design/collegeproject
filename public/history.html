@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Attendance History</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>Attendance history</h1>
+  <p class="subtitle">Past and current sessions. Tap one to see who was present and download a CSV.</p>
+
+  <div class="card">
+    <h2>Sessions</h2>
+    <ul id="session-list" class="list"><li class="empty">Loading...</li></ul>
+  </div>
+
+  <div id="detail" style="display:none;">
+    <div class="card">
+      <div class="row" style="align-items:flex-start;">
+        <div>
+          <h1 id="detail-title" style="margin-bottom:4px;"></h1>
+          <span class="badge neutral" id="detail-when"></span>
+          <span class="badge neutral" id="detail-roster"></span>
+        </div>
+        <a id="csv-link" href="#" style="text-decoration:none; flex:0 0 auto;">
+          <button class="secondary" style="margin-top:0;">Download CSV</button>
+        </a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Present (<span id="detail-count">0</span>)</h2>
+      <ul id="detail-present" class="list"></ul>
+    </div>
+
+    <div class="card">
+      <h2>Flagged attempts (<span id="detail-flagged-count">0</span>)</h2>
+      <ul id="detail-flagged" class="list"></ul>
+    </div>
+  </div>
+
+  <p class="footer-note"><a href="index.html" style="color:var(--text-dim);">← Back</a></p>
+
+  <script>
+    const reasonLabel = {
+      outside_geofence: 'Outside classroom',
+      device_mismatch: 'Device mismatch',
+      not_enrolled: 'Not enrolled',
+    };
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+
+    async function loadSessions() {
+      const res = await fetch('/api/sessions');
+      const sessions = await res.json();
+      const ul = document.getElementById('session-list');
+
+      if (!Array.isArray(sessions) || sessions.length === 0) {
+        ul.innerHTML = '<li class="empty">No sessions yet.</li>';
+        return;
+      }
+
+      ul.innerHTML = sessions.map((s) => {
+        const live = s.active && new Date(s.endTime) > new Date();
+        const total = s.rosterSize > 0 ? ` / ${s.rosterSize}` : '';
+        return `
+          <li style="cursor:pointer;" data-id="${s.sessionId}">
+            <span class="who">${esc(s.subject)}
+              ${live ? '<span class="badge ok">live</span>' : ''}
+              <span class="badge neutral">${s.presentCount}${total} present</span>
+            </span>
+            <span class="when">${new Date(s.startTime).toLocaleString()}</span>
+          </li>`;
+      }).join('');
+
+      ul.querySelectorAll('li[data-id]').forEach((li) => {
+        li.onclick = () => showDetail(li.dataset.id);
+      });
+    }
+
+    async function showDetail(id) {
+      const [session, records, flags] = await Promise.all([
+        fetch(`/api/sessions/${id}`).then((r) => r.json()),
+        fetch(`/api/sessions/${id}/attendance`).then((r) => r.json()),
+        fetch(`/api/sessions/${id}/flagged`).then((r) => r.json()),
+      ]);
+
+      document.getElementById('detail').style.display = 'block';
+      document.getElementById('detail-title').textContent = session.subject;
+      document.getElementById('detail-when').textContent =
+        `🕒 ${new Date(session.endTime).toLocaleString()}`;
+      document.getElementById('detail-roster').textContent =
+        session.rosterSize > 0 ? `👥 ${session.rosterSize} enrolled` : '👥 open roster';
+      document.getElementById('csv-link').href = `/api/sessions/${id}/export.csv`;
+
+      document.getElementById('detail-count').textContent = records.length;
+      document.getElementById('detail-present').innerHTML = records.length
+        ? records.map((r) => `
+            <li>
+              <span class="who">${esc(r.student ? r.student.rollNo : '?')} — ${esc(r.student ? r.student.name : '')}
+                <span class="badge neutral">${Math.round(r.distanceMeters)}m${r.accuracyMeters != null ? ` ±${Math.round(r.accuracyMeters)}m` : ''}</span>
+              </span>
+              <span class="when">${new Date(r.markedAt).toLocaleTimeString()}</span>
+            </li>`).join('')
+        : '<li class="empty">Nobody was marked present.</li>';
+
+      document.getElementById('detail-flagged-count').textContent = flags.length;
+      document.getElementById('detail-flagged').innerHTML = flags.length
+        ? flags.map((f) => `
+            <li>
+              <span>
+                <span class="badge err">${esc(reasonLabel[f.reason] || f.reason)}</span>
+                <span class="who">${esc(f.rollNo)}</span> — ${esc(f.detail)}
+              </span>
+              <span class="when">${new Date(f.createdAt).toLocaleTimeString()}</span>
+            </li>`).join('')
+        : '<li class="empty">Nothing flagged.</li>';
+
+      document.getElementById('detail').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    loadSessions();
+  </script>
+</body>
+</html>

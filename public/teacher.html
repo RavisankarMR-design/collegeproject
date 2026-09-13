@@ -9,7 +9,8 @@
 </head>
 <body>
   <h1>Start a class session</h1>
-  <p class="subtitle">The QR rotates every 10s and only counts inside the classroom radius.</p>
+  <p class="subtitle">The QR rotates every 10s and only counts inside the classroom radius.
+    <a href="history.html" style="color:var(--accent);">View past sessions →</a></p>
 
   <div id="setup" class="card">
     <label for="subject">Subject</label>
@@ -100,6 +101,14 @@
       not_enrolled: 'Not enrolled',
     };
 
+    // Roll numbers and names are student-supplied and rendered via innerHTML,
+    // so they have to be escaped or a crafted name runs script in this panel.
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+
     document.getElementById('capture-loc').onclick = () => {
       const el = document.getElementById('loc-status');
       el.style.display = 'block';
@@ -139,10 +148,18 @@
       const data = await res.json();
       if (!res.ok) { alert(data.error); return; }
 
+      enterLiveMode(data);
+    };
+
+    // Shared by "start session" and by the restore-after-refresh path below,
+    // so a reloaded tab picks the running session back up instead of
+    // orphaning it (the id used to live only in this variable).
+    function enterLiveMode(data) {
       sessionId = data.sessionId;
       windowSeconds = data.windowSeconds;
       rosterSize = data.rosterSize;
       sessionEndTime = new Date(data.endTime);
+      localStorage.setItem('active_session', sessionId);
 
       document.getElementById('subject-title').textContent = data.subject;
       document.getElementById('radius-badge').textContent = `📍 ${data.classroom.radiusMeters}m radius`;
@@ -159,7 +176,22 @@
       setInterval(refreshList, 3000);
       refreshFlagged();
       setInterval(refreshFlagged, 3000);
-    };
+    }
+
+    async function restoreSession() {
+      const savedId = localStorage.getItem('active_session');
+      if (!savedId) return;
+
+      try {
+        const res = await fetch(`/api/sessions/${savedId}`);
+        if (!res.ok) throw new Error('gone');
+        const data = await res.json();
+        if (!data.active || new Date(data.endTime) <= new Date()) throw new Error('ended');
+        enterLiveMode(data);
+      } catch {
+        localStorage.removeItem('active_session');
+      }
+    }
 
     document.getElementById('extend-btn').onclick = async () => {
       const btn = document.getElementById('extend-btn');
@@ -179,6 +211,7 @@
     document.getElementById('end-btn').onclick = async () => {
       if (!confirm('End this session? Students will no longer be able to mark attendance.')) return;
       await fetch(`/api/sessions/${sessionId}/end`, { method: 'POST' });
+      localStorage.removeItem('active_session');
       alert('Session ended.');
       location.reload();
     };
@@ -208,7 +241,7 @@
       }
       ul.innerHTML = records.map((r) => `
         <li>
-          <span class="who">${r.student.rollNo} — ${r.student.name}
+          <span class="who">${esc(r.student.rollNo)} — ${esc(r.student.name)}
             <span class="badge neutral">${Math.round(r.distanceMeters)}m${r.accuracyMeters != null ? ` ±${Math.round(r.accuracyMeters)}m` : ''}</span>
           </span>
           <span class="when">${new Date(r.markedAt).toLocaleTimeString()}</span>
@@ -228,13 +261,15 @@
       ul.innerHTML = flags.map((f) => `
         <li>
           <span>
-            <span class="badge err">${reasonLabel[f.reason] || f.reason}</span>
-            <span class="who">${f.rollNo}</span> — ${f.detail}${f.accuracyMeters != null ? ` (GPS ±${Math.round(f.accuracyMeters)}m)` : ''}
+            <span class="badge err">${esc(reasonLabel[f.reason] || f.reason)}</span>
+            <span class="who">${esc(f.rollNo)}</span> — ${esc(f.detail)}${f.accuracyMeters != null ? ` (GPS ±${Math.round(f.accuracyMeters)}m)` : ''}
           </span>
           <span class="when">${new Date(f.createdAt).toLocaleTimeString()}</span>
         </li>
       `).join('');
     }
+
+    restoreSession();
   </script>
 </body>
 </html>
