@@ -82,9 +82,12 @@ router.post('/mark', async (req, res) => {
 
     // 4. Device-binding check — blocks one phone marking attendance for
     //    multiple roll numbers.
-    let student = await Student.findOne({ rollNo });
+    // Always key the student off the normalized roll number — looking up the
+    // raw one let "21cs001" and "21CS001" become two separate students, which
+    // silently bypassed both the device binding and the per-session unique index.
+    let student = await Student.findOne({ rollNo: normalizedRoll });
     if (!student) {
-      student = await Student.create({ rollNo, name, deviceId });
+      student = await Student.create({ rollNo: normalizedRoll, name, deviceId });
     } else if (!student.deviceId) {
       student.deviceId = deviceId;
       await student.save();
