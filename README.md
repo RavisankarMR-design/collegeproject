@@ -157,6 +157,16 @@ cluster — just point `MONGO_URI` at it).
   exposes), and lets device binding lock to a verified identity instead of
   "whoever scanned first." Also removes manual roster paste — the roster
   could be pulled automatically per section.
+  - **Bundle in at the same time**: add a uniqueness constraint on
+    `Student.deviceId` (currently only `rollNo` is unique — nothing stops
+    one device from being the first-binder for unlimited identities,
+    confirmed live: one phone marked 3 different roll numbers present in
+    one session). Ship this alongside login, not before — it makes a
+    device→identity lock permanent and global, so it needs to bind to a
+    *verified* identity, not a self-typed one, and needs an admin
+    "reset this student's device" endpoint shipped in the same change
+    (legitimate phone swaps would otherwise permanently lock someone out
+    with no recovery path).
 - **BLE/RSSI proximity** as a second, floor/room-precise signal alongside
   GPS — the actual fix for the GPS-precision limitation above, not a config
   tweak.
