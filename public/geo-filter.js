@@ -74,32 +74,56 @@ class KalmanLocationFilter {
 function getFilteredPosition(onProgress) {
   return new Promise((resolve, reject) => {
     const GOOD_ENOUGH_METERS = 12;
-    const TIMEOUT_MS = 5000;
+    const TIMEOUT_MS = 8000;
+    // A PositionError before any fix has arrived is usually POSITION_UNAVAILABLE
+    // — the GPS provider is momentarily busy, e.g. because the previous scan
+    // only just released it — not a real failure. Restarting the watch a
+    // couple of times fixes this transparently instead of failing outright
+    // and forcing the student to notice and tap Scan again themselves.
+    const MAX_RESTART_ATTEMPTS = 2;
+    const RESTART_DELAY_MS = 500;
+
     const filter = new KalmanLocationFilter();
     let latest = null;
     let gotAnyFix = false;
+    let watchId = null;
+    let restarts = 0;
 
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        gotAnyFix = true;
-        latest = filter.process(
-          pos.coords.latitude,
-          pos.coords.longitude,
-          pos.coords.accuracy,
-          pos.timestamp || Date.now()
-        );
-        if (onProgress) onProgress(latest.accuracy);
-        if (latest.accuracy <= GOOD_ENOUGH_METERS) finish();
-      },
-      (err) => { if (gotAnyFix) finish(); else { cleanup(); reject(err); } },
-      { enableHighAccuracy: true, maximumAge: 0 }
-    );
+    function startWatch() {
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          gotAnyFix = true;
+          latest = filter.process(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            pos.coords.accuracy,
+            pos.timestamp || Date.now()
+          );
+          if (onProgress) onProgress(latest.accuracy);
+          if (latest.accuracy <= GOOD_ENOUGH_METERS) finish();
+        },
+        (err) => {
+          if (gotAnyFix) { finish(); return; }
+          if (restarts < MAX_RESTART_ATTEMPTS) {
+            restarts++;
+            navigator.geolocation.clearWatch(watchId);
+            setTimeout(startWatch, RESTART_DELAY_MS);
+          } else {
+            cleanup();
+            reject(err);
+          }
+        },
+        { enableHighAccuracy: true, maximumAge: 0 }
+      );
+    }
+    startWatch();
 
     const timer = setTimeout(finish, TIMEOUT_MS);
-    function cleanup() { clearTimeout(timer); navigator.geolocation.clearWatch(watchId); }
+    function cleanup() { clearTimeout(timer); if (watchId != null) navigator.geolocation.clearWatch(watchId); }
     function finish() {
       cleanup();
-      if (latest) resolve(latest); else reject(new Error('Could not get a location fix'));
+      if (latest) resolve(latest);
+      else reject(new Error('Still could not get a GPS fix. Check that location/GPS is turned on, then try again.'));
     }
   });
 }

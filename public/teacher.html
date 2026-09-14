@@ -116,10 +116,27 @@
     // the socket (re)connects, not just on the first "start session" click.
     socket.on('connect', () => { if (sessionId) socket.emit('join', sessionId); });
 
+    // A live start→end countdown, not just a static "ends at" clock time —
+    // that way clicking +5 min is immediately, visibly obvious (the number
+    // jumps by 5:00) instead of a subtle change to a clock-face badge that's
+    // easy to miss. Extending is still entirely manual — this only makes the
+    // *effect* of doing it visible, it doesn't add or change any automation.
     function renderEndTimeBadge() {
       if (!sessionEndTime) return;
-      document.getElementById('end-time-badge').textContent =
-        `⏱ Ends ${sessionEndTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      const el = document.getElementById('end-time-badge');
+      const msLeft = sessionEndTime.getTime() - Date.now();
+
+      if (msLeft <= 0) {
+        el.textContent = '⏱ Session ended';
+        el.className = 'badge err';
+        return;
+      }
+
+      const totalSeconds = Math.floor(msLeft / 1000);
+      const mm = Math.floor(totalSeconds / 60);
+      const ss = String(totalSeconds % 60).padStart(2, '0');
+      el.textContent = `⏱ ${mm}:${ss} remaining`;
+      el.className = msLeft < 2 * 60000 ? 'badge err' : 'badge warn';
     }
 
     const reasonLabel = {
@@ -222,6 +239,7 @@
       setInterval(refreshList, 3000);
       refreshFlagged();
       setInterval(refreshFlagged, 3000);
+      setInterval(renderEndTimeBadge, 1000);
     }
 
     // Loads a session that was started on a *different* device — e.g.
@@ -289,16 +307,25 @@
     document.getElementById('extend-btn').onclick = async () => {
       const btn = document.getElementById('extend-btn');
       btn.disabled = true;
-      const res = await fetch(`/api/sessions/${sessionId}/extend`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ minutes: 5 }),
-      });
-      const data = await res.json();
-      btn.disabled = false;
-      if (!res.ok) { alert(data.error); return; }
-      sessionEndTime = new Date(data.endTime);
-      renderEndTimeBadge();
+      // A network hiccup (flaky classroom WiFi) throwing out of fetch() or
+      // res.json() used to skip straight past re-enabling the button below,
+      // leaving it stuck disabled with zero visible feedback — looked
+      // exactly like "the button doesn't work" with no way to tell why.
+      try {
+        const res = await fetch(`/api/sessions/${sessionId}/extend`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ minutes: 5 }),
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error); return; }
+        sessionEndTime = new Date(data.endTime);
+        renderEndTimeBadge();
+      } catch (err) {
+        alert('Could not extend the session — check your connection and try again. (' + err.message + ')');
+      } finally {
+        btn.disabled = false;
+      }
     };
 
     document.getElementById('end-btn').onclick = async () => {

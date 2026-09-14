@@ -160,7 +160,13 @@
           }
         })
         .catch((err) => {
-          showMsg('Location permission is required: ' + err.message, false);
+          // err.code === 1 is GeolocationPositionError.PERMISSION_DENIED —
+          // only that specific case is actually about permission. Labeling
+          // every failure (weak signal, GPS momentarily unavailable, our own
+          // retry budget running out) as a permission problem sends students
+          // to the wrong settings screen.
+          const msg = err.code === 1 ? 'Location permission is required: ' + err.message : err.message;
+          showMsg(msg, false);
           setBusy(false);
         });
     }
