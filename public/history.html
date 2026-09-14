@@ -104,6 +104,7 @@
             <li>
               <span class="who">${esc(r.student ? r.student.rollNo : '?')} — ${esc(r.student ? r.student.name : '')}
                 <span class="badge neutral">${Math.round(r.distanceMeters)}m${r.accuracyMeters != null ? ` ±${Math.round(r.accuracyMeters)}m` : ''}</span>
+                ${r.borderline ? '<span class="badge warn">borderline</span>' : ''}
               </span>
               <span class="when">${new Date(r.markedAt).toLocaleTimeString()}</span>
             </li>`).join('')

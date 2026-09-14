@@ -65,12 +65,23 @@ router.post('/mark', async (req, res) => {
 
     // 2. Geofence check — blocks scanning the (still-valid) QR from outside class,
     //    e.g. a friend photographing/video-calling the live code to someone off-campus.
+    //
+    // A raw "distance <= radius" comparison treats the GPS reading as exact,
+    // which it isn't — accuracy is itself a margin of error. So the reported
+    // uncertainty circle is used to split into three cases instead of one
+    // cutoff: definitely inside (accept), definitely outside even in the best
+    // case (reject), and the boundary straddling both (accept, but flagged as
+    // borderline so the teacher can see it wasn't a clean read).
     const distance = distanceMeters(lat, lng, session.classroom.lat, session.classroom.lng);
-    if (distance > session.classroom.radiusMeters) {
-      const detail = `~${Math.round(distance)}m from the classroom (limit ${session.classroom.radiusMeters}m)`;
+    const radius = session.classroom.radiusMeters;
+    const margin = accuracy == null ? 0 : accuracy;
+
+    if (distance - margin > radius) {
+      const detail = `~${Math.round(distance)}m from the classroom (limit ${radius}m)`;
       await flag(session, { rollNo, name, deviceId }, 'outside_geofence', detail, distance, accuracy);
       return res.status(403).json({ error: `You appear to be ${detail}.` });
     }
+    const borderline = distance + margin > radius;
 
     // 3. Roster check — with an enrolled list set, only those roll numbers can
     //    ever be marked present, so a 30-student class can't end up with 31 records.
@@ -106,9 +117,16 @@ router.post('/mark', async (req, res) => {
         student: student._id,
         distanceMeters: distance,
         accuracyMeters: accuracy,
+        borderline,
         deviceId,
       });
-      return res.status(201).json({ ok: true, distanceMeters: Math.round(distance), accuracyMeters: accuracy, markedAt: record.markedAt });
+      return res.status(201).json({
+        ok: true,
+        distanceMeters: Math.round(distance),
+        accuracyMeters: accuracy,
+        borderline,
+        markedAt: record.markedAt,
+      });
     } catch (err) {
       if (err.code === 11000) {
         return res.status(409).json({ error: 'Attendance already marked for this session.' });

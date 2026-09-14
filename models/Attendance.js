@@ -9,6 +9,11 @@ const AttendanceSchema = new mongoose.Schema({
   // "0m from center" reading that was actually a noisy ±40m fix is visible
   // later instead of looking perfectly precise.
   accuracyMeters: { type: Number, default: null },
+  // True when the GPS uncertainty circle crosses the geofence boundary —
+  // distance and accuracy alone can't tell whether this student was
+  // actually inside or outside, so it's accepted but flagged for the
+  // teacher to see rather than silently guessed either way.
+  borderline: { type: Boolean, default: false },
   deviceId: { type: String, required: true },
 });
 

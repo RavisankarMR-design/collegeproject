@@ -152,13 +152,14 @@ router.get('/:id/export.csv', async (req, res) => {
       .sort({ markedAt: 1 });
 
     const rows = [
-      ['Roll No', 'Name', 'Marked At', 'Distance (m)', 'GPS Accuracy (m)'],
+      ['Roll No', 'Name', 'Marked At', 'Distance (m)', 'GPS Accuracy (m)', 'Borderline'],
       ...records.map((r) => [
         r.student ? r.student.rollNo : '',
         r.student ? r.student.name : '',
         new Date(r.markedAt).toISOString(),
         Math.round(r.distanceMeters),
         r.accuracyMeters == null ? '' : Math.round(r.accuracyMeters),
+        r.borderline ? 'yes' : '',
       ]),
     ];
 

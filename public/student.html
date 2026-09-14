@@ -126,12 +126,42 @@
       div.innerHTML = `<div class="msg ${ok ? 'ok' : 'err'}">${text}</div>`;
     }
 
+    // A single getCurrentPosition() call often returns the first fix, which
+    // on many phones is the least accurate one (cached/network-based, before
+    // the GPS chip has warmed up). Sampling for a few seconds and keeping the
+    // most accurate reading materially reduces the kind of noise that showed
+    // up as wildly inconsistent distance readings between scans.
+    function getBestPosition(onProgress) {
+      return new Promise((resolve, reject) => {
+        const GOOD_ENOUGH_METERS = 15;
+        const TIMEOUT_MS = 4000;
+        let best = null;
+
+        const watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            if (!best || pos.coords.accuracy < best.coords.accuracy) best = pos;
+            if (onProgress) onProgress(best.coords.accuracy);
+            if (best.coords.accuracy <= GOOD_ENOUGH_METERS) finish();
+          },
+          (err) => { if (best) finish(); else { cleanup(); reject(err); } },
+          { enableHighAccuracy: true, maximumAge: 0 }
+        );
+
+        const timer = setTimeout(finish, TIMEOUT_MS);
+        function cleanup() { clearTimeout(timer); navigator.geolocation.clearWatch(watchId); }
+        function finish() {
+          cleanup();
+          if (best) resolve(best); else reject(new Error('Could not get a location fix'));
+        }
+      });
+    }
+
     function handleScan(payload, rollNo, name) {
       if (!navigator.geolocation) { showMsg('Geolocation not supported on this device.', false); setBusy(false); return; }
 
-      setBusy(true, 'Confirming location...');
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
+      setBusy(true, 'Getting GPS fix...');
+      getBestPosition((acc) => setBusy(true, `Improving GPS fix (best so far ~${Math.round(acc)}m)...`))
+        .then(async (pos) => {
           setBusy(true, `Verifying (GPS accuracy ~${Math.round(pos.coords.accuracy)}m)...`);
           const body = {
             payload,
@@ -150,17 +180,18 @@
           const data = await res.json();
           setBusy(false);
           if (res.ok) {
-            showMsg(`✓ Marked present — ~${data.distanceMeters}m from classroom center (GPS accuracy ~${Math.round(data.accuracyMeters)}m).`, true);
+            const note = data.borderline
+              ? ' — near the edge of the detection radius, flagged for teacher review.'
+              : '.';
+            showMsg(`✓ Marked present — ~${data.distanceMeters}m from classroom center (GPS accuracy ~${Math.round(data.accuracyMeters)}m)${note}`, true);
           } else {
             showMsg(data.error, false);
           }
-        },
-        (err) => {
+        })
+        .catch((err) => {
           showMsg('Location permission is required: ' + err.message, false);
           setBusy(false);
-        },
-        { enableHighAccuracy: true }
-      );
+        });
     }
   </script>
 </body>
