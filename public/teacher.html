@@ -6,6 +6,7 @@
 <title>Teacher — Attendance</title>
 <link rel="stylesheet" href="style.css" />
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <h1>Start a class session</h1>
@@ -89,6 +90,16 @@
   <script>
     let lat = null, lng = null, sessionId = null, windowSeconds = 10, rosterSize = 0, sessionEndTime = null;
 
+    // Pushes an instant refresh the moment a student is marked present or
+    // flagged, instead of waiting for the next poll (up to 3s away). Polling
+    // stays in place underneath as a fallback if the socket ever drops.
+    const socket = io();
+    socket.on('present', () => { if (sessionId) refreshList(); });
+    socket.on('flagged', () => { if (sessionId) refreshFlagged(); });
+    // Room membership doesn't survive a dropped connection — rejoin whenever
+    // the socket (re)connects, not just on the first "start session" click.
+    socket.on('connect', () => { if (sessionId) socket.emit('join', sessionId); });
+
     function renderEndTimeBadge() {
       if (!sessionEndTime) return;
       document.getElementById('end-time-badge').textContent =
@@ -160,6 +171,7 @@
       rosterSize = data.rosterSize;
       sessionEndTime = new Date(data.endTime);
       localStorage.setItem('active_session', sessionId);
+      socket.emit('join', sessionId);
 
       document.getElementById('subject-title').textContent = data.subject;
       document.getElementById('radius-badge').textContent = `📍 ${data.classroom.radiusMeters}m radius`;
