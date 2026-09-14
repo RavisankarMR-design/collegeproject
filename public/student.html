@@ -126,24 +126,95 @@
       div.innerHTML = `<div class="msg ${ok ? 'ok' : 'err'}">${text}</div>`;
     }
 
-    // A single getCurrentPosition() call often returns the first fix, which
-    // on many phones is the least accurate one (cached/network-based, before
-    // the GPS chip has warmed up). Sampling for a few seconds and keeping the
-    // most accurate reading materially reduces the kind of noise that showed
-    // up as wildly inconsistent distance readings between scans.
-    function getBestPosition(onProgress) {
+    // "Take one reading and keep it" throws away information — each new GPS
+    // fix says something about where you are even if it's noisy. A Kalman
+    // filter fuses every sample into a running estimate instead: each fix is
+    // weighted by its own reported accuracy (a confident fix pulls the
+    // estimate hard, a noisy one barely moves it), and uncertainty grows
+    // between fixes based on how much a person could plausibly have moved.
+    // This is the standard technique for exactly this problem — the same
+    // approach used by e.g. mobile fitness/tracking apps to smooth raw GPS.
+    function haversineApprox(lat1, lng1, lat2, lng2) {
+      const R = 6371000;
+      const toRad = (d) => (d * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    class KalmanLocationFilter {
+      // processNoise: meters/sec of plausible movement, i.e. how fast our
+      // confidence should erode between fixes. A slow walk, not a car.
+      constructor(processNoise = 3) {
+        this.variance = -1;
+        this.processNoise = processNoise;
+      }
+      process(lat, lng, accuracy, timestampMs) {
+        const acc = Math.max(accuracy, 1); // a reported 0m accuracy is not real
+        if (this.variance < 0) {
+          this.timestamp = timestampMs;
+          this.lat = lat;
+          this.lng = lng;
+          this.variance = acc * acc;
+        } else {
+          const dtSeconds = Math.max(0, (timestampMs - this.timestamp) / 1000);
+
+          // A jump wildly bigger than what either reading's own claimed
+          // accuracy could plausibly explain (a stray multipath reflection,
+          // not real movement or ordinary noise) is discarded outright — a
+          // Kalman filter otherwise still lets one bad sample drag the
+          // estimate a long way before it recovers. Gated on the readings'
+          // own uncertainty rather than an assumed speed, since a flat speed
+          // threshold is fragile: how far apart two noisy-but-valid fixes
+          // land depends on the device's polling interval, not just how fast
+          // someone could move — a threshold tuned for 1.5s-apart fixes can
+          // misfire on fixes 0.5s apart even with no outlier involved.
+          if (dtSeconds > 0) {
+            const jumpMeters = haversineApprox(this.lat, this.lng, lat, lng);
+            const priorAccuracy = Math.sqrt(this.variance);
+            const plausibleAllowance = 3 * (priorAccuracy + acc) + this.processNoise * dtSeconds;
+            if (jumpMeters > plausibleAllowance) {
+              return { lat: this.lat, lng: this.lng, accuracy: Math.sqrt(this.variance) };
+            }
+          }
+
+          this.timestamp = timestampMs;
+          this.variance += dtSeconds * this.processNoise * this.processNoise; // uncertainty grows with time since last fix
+          const gain = this.variance / (this.variance + acc * acc);
+          this.lat += gain * (lat - this.lat);
+          this.lng += gain * (lng - this.lng);
+          this.variance = (1 - gain) * this.variance;
+        }
+        return { lat: this.lat, lng: this.lng, accuracy: Math.sqrt(this.variance) };
+      }
+    }
+
+    // Samples for a few seconds, running every fix through the filter above,
+    // instead of a single getCurrentPosition() call — which on many phones
+    // returns the first fix, commonly the least accurate one (cached/
+    // network-based, before the GPS chip has warmed up).
+    function getFilteredPosition(onProgress) {
       return new Promise((resolve, reject) => {
-        const GOOD_ENOUGH_METERS = 15;
-        const TIMEOUT_MS = 4000;
-        let best = null;
+        const GOOD_ENOUGH_METERS = 12;
+        const TIMEOUT_MS = 5000;
+        const filter = new KalmanLocationFilter();
+        let latest = null;
+        let gotAnyFix = false;
 
         const watchId = navigator.geolocation.watchPosition(
           (pos) => {
-            if (!best || pos.coords.accuracy < best.coords.accuracy) best = pos;
-            if (onProgress) onProgress(best.coords.accuracy);
-            if (best.coords.accuracy <= GOOD_ENOUGH_METERS) finish();
+            gotAnyFix = true;
+            latest = filter.process(
+              pos.coords.latitude,
+              pos.coords.longitude,
+              pos.coords.accuracy,
+              pos.timestamp || Date.now()
+            );
+            if (onProgress) onProgress(latest.accuracy);
+            if (latest.accuracy <= GOOD_ENOUGH_METERS) finish();
           },
-          (err) => { if (best) finish(); else { cleanup(); reject(err); } },
+          (err) => { if (gotAnyFix) finish(); else { cleanup(); reject(err); } },
           { enableHighAccuracy: true, maximumAge: 0 }
         );
 
@@ -151,7 +222,7 @@
         function cleanup() { clearTimeout(timer); navigator.geolocation.clearWatch(watchId); }
         function finish() {
           cleanup();
-          if (best) resolve(best); else reject(new Error('Could not get a location fix'));
+          if (latest) resolve(latest); else reject(new Error('Could not get a location fix'));
         }
       });
     }
@@ -160,16 +231,16 @@
       if (!navigator.geolocation) { showMsg('Geolocation not supported on this device.', false); setBusy(false); return; }
 
       setBusy(true, 'Getting GPS fix...');
-      getBestPosition((acc) => setBusy(true, `Improving GPS fix (best so far ~${Math.round(acc)}m)...`))
+      getFilteredPosition((acc) => setBusy(true, `Refining GPS fix (~${Math.round(acc)}m)...`))
         .then(async (pos) => {
-          setBusy(true, `Verifying (GPS accuracy ~${Math.round(pos.coords.accuracy)}m)...`);
+          setBusy(true, `Verifying (GPS accuracy ~${Math.round(pos.accuracy)}m)...`);
           const body = {
             payload,
             rollNo,
             name,
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
+            lat: pos.lat,
+            lng: pos.lng,
+            accuracy: pos.accuracy,
             deviceId: await getDeviceId(),
           };
           const res = await fetch('/api/attendance/mark', {
