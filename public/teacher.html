@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="style.css" />
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 <script src="/socket.io/socket.io.js"></script>
+<script src="geo-filter.js"></script>
 </head>
 <body>
   <h1>Start a class session</h1>
@@ -125,20 +126,36 @@
       el.style.display = 'block';
       el.className = 'msg info';
       el.textContent = 'Locating...';
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          lat = pos.coords.latitude;
-          lng = pos.coords.longitude;
-          el.className = 'msg ok';
-          el.textContent = `Captured: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+
+      if (!navigator.geolocation) {
+        el.className = 'msg err';
+        el.textContent = 'Geolocation not supported on this device.';
+        return;
+      }
+
+      // Same Kalman-filtered fix as the student page (see geo-filter.js) —
+      // a laptop usually has no real GPS chip at all and relies on WiFi/IP
+      // geolocation, which is often noisier than a phone's, so a single
+      // raw reading here was an unaddressed source of error even after the
+      // student side got this treatment.
+      getFilteredPosition((acc) => { el.className = 'msg info'; el.textContent = `Refining GPS fix (~${Math.round(acc)}m)...`; })
+        .then((pos) => {
+          lat = pos.lat;
+          lng = pos.lng;
+          const accText = `~${Math.round(pos.accuracy)}m accuracy`;
+          if (pos.accuracy > 50) {
+            el.className = 'msg err';
+            el.textContent = `Captured, but accuracy is poor (${accText}) — if this device is a laptop with no GPS chip, capturing from a phone instead will likely be far more precise. ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          } else {
+            el.className = 'msg ok';
+            el.textContent = `Captured (${accText}): ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          }
           document.getElementById('start-btn').disabled = false;
-        },
-        (err) => {
+        })
+        .catch((err) => {
           el.className = 'msg err';
           el.textContent = 'Location failed: ' + err.message;
-        },
-        { enableHighAccuracy: true }
-      );
+        });
     };
 
     document.getElementById('start-btn').onclick = async () => {
