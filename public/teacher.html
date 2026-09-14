@@ -49,6 +49,8 @@
           <span class="badge neutral" id="radius-badge"></span>
           <span class="badge neutral" id="roster-badge"></span>
           <span class="badge warn" id="end-time-badge"></span>
+          <br />
+          <button id="copy-link-btn" class="secondary" style="width:auto; margin-top:8px; padding:6px 12px; font-size:.8rem;">🔗 Copy display link</button>
         </div>
         <div style="display:flex; flex-direction:column; gap:8px;">
           <button id="extend-btn" class="secondary" style="margin-top:0;">+5 min</button>
@@ -207,20 +209,45 @@
       setInterval(refreshFlagged, 3000);
     }
 
-    async function restoreSession() {
-      const savedId = localStorage.getItem('active_session');
-      if (!savedId) return;
-
+    // Loads a session that was started on a *different* device — e.g.
+    // captured on a phone (real GPS) but displayed on the classroom PC/smart
+    // board connected to the projector. Checked before the localStorage
+    // restore so a shared link always wins over whatever this browser had
+    // open before.
+    async function loadSessionById(id) {
       try {
-        const res = await fetch(`/api/sessions/${savedId}`);
+        const res = await fetch(`/api/sessions/${id}`);
         if (!res.ok) throw new Error('gone');
         const data = await res.json();
         if (!data.active || new Date(data.endTime) <= new Date()) throw new Error('ended');
         enterLiveMode(data);
+        return true;
       } catch {
-        localStorage.removeItem('active_session');
+        return false;
       }
     }
+
+    async function restoreSession() {
+      const urlSessionId = new URLSearchParams(location.search).get('session');
+      if (urlSessionId && (await loadSessionById(urlSessionId))) return;
+
+      const savedId = localStorage.getItem('active_session');
+      if (!savedId) return;
+      if (!(await loadSessionById(savedId))) localStorage.removeItem('active_session');
+    }
+
+    document.getElementById('copy-link-btn').onclick = async () => {
+      const btn = document.getElementById('copy-link-btn');
+      const link = `${location.origin}/teacher.html?session=${sessionId}`;
+      try {
+        await navigator.clipboard.writeText(link);
+        const original = btn.textContent;
+        btn.textContent = '✓ Copied — open on the smart board';
+        setTimeout(() => { btn.textContent = original; }, 2500);
+      } catch {
+        prompt('Copy this link and open it on the display device:', link);
+      }
+    };
 
     document.getElementById('extend-btn').onclick = async () => {
       const btn = document.getElementById('extend-btn');
