@@ -12,6 +12,15 @@ function csvCell(value) {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+// Excludes visually ambiguous characters (0/O, 1/I/L) so a code read off a
+// phone screen and typed on a remote/keyboard is never misread.
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function generateDisplayCode() {
+  let code = '';
+  for (let i = 0; i < 6; i++) code += CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)];
+  return code;
+}
+
 // Past + current sessions for the history page, newest first, with how many
 // students were marked present in each. `secret` must never leave the server.
 router.get('/', async (req, res) => {
@@ -51,14 +60,25 @@ router.post('/', async (req, res) => {
       ? [...new Set(roster.map((r) => String(r).trim().toUpperCase()).filter(Boolean))]
       : [];
 
-    const session = await Session.create({
-      subject,
-      teacherName,
-      secret: crypto.randomBytes(16).toString('hex'),
-      classroom: { lat, lng, radiusMeters: radiusMeters || 30 },
-      endTime: new Date(Date.now() + durationMinutes * 60000),
-      roster: normalizedRoster,
-    });
+    // displayCode has a uniqueness constraint; collisions are astronomically
+    // rare at 32^6 combinations but a create() can still race one, so retry
+    // a couple of times rather than fail the whole session start on it.
+    let session;
+    for (let attempt = 0; !session; attempt++) {
+      try {
+        session = await Session.create({
+          subject,
+          teacherName,
+          secret: crypto.randomBytes(16).toString('hex'),
+          classroom: { lat, lng, radiusMeters: radiusMeters || 30 },
+          endTime: new Date(Date.now() + durationMinutes * 60000),
+          roster: normalizedRoster,
+          displayCode: generateDisplayCode(),
+        });
+      } catch (err) {
+        if (err.code !== 11000 || attempt >= 4) throw err;
+      }
+    }
 
     res.status(201).json({
       sessionId: session._id,
@@ -68,6 +88,7 @@ router.post('/', async (req, res) => {
       windowSeconds: session.windowSeconds,
       endTime: session.endTime,
       rosterSize: session.roster.length,
+      displayCode: session.displayCode,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -88,6 +109,31 @@ router.get('/:id', async (req, res) => {
       endTime: session.endTime,
       active: session.active,
       rosterSize: session.roster.length,
+      displayCode: session.displayCode,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Resolves a short human-typed join code to the same session-summary shape
+// as GET /:id, so a second device (a smart board with no easy way to paste
+// a link) can join a live session by typing a few characters instead.
+router.get('/by-code/:code', async (req, res) => {
+  try {
+    const code = String(req.params.code).trim().toUpperCase();
+    const session = await Session.findOne({ displayCode: code });
+    if (!session) return res.status(404).json({ error: 'No session found for that code.' });
+    res.json({
+      sessionId: session._id,
+      subject: session.subject,
+      teacherName: session.teacherName,
+      classroom: session.classroom,
+      windowSeconds: session.windowSeconds,
+      endTime: session.endTime,
+      active: session.active,
+      rosterSize: session.roster.length,
+      displayCode: session.displayCode,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

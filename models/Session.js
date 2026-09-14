@@ -14,6 +14,10 @@ const SessionSchema = new mongoose.Schema({
   startTime: { type: Date, default: Date.now },
   endTime: { type: Date, required: true },
   active: { type: Boolean, default: true },
+  // Short human-typeable code so a second device (e.g. a classroom PC/smart
+  // board with no camera or easy way to paste a link) can join this exact
+  // session by typing a few characters instead of a full URL.
+  displayCode: { type: String, required: true, unique: true },
   // Enrolled roll numbers for this session. Empty = any roll number accepted
   // (open mode). Non-empty = only these roll numbers can be marked present,
   // so a class of 30 can never end up with 31 attendance records.

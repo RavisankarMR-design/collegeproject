@@ -41,6 +41,16 @@
     <button id="start-btn" disabled>Start session</button>
   </div>
 
+  <div class="card" id="join-card">
+    <h2>Or display an existing session</h2>
+    <p class="subtitle" style="margin:0 0 10px;">Started on your phone already? Type its code here — e.g. on the smart board's remote/keyboard, no link or camera needed.</p>
+    <div class="row">
+      <input id="join-code" placeholder="e.g. K7Q3RT" style="text-transform:uppercase; letter-spacing:2px; font-weight:700;" maxlength="6" />
+      <button id="join-code-btn" class="secondary" style="width:auto; margin-top:0;">Join</button>
+    </div>
+    <div id="join-status" class="msg err" style="display:none;"></div>
+  </div>
+
   <div id="live" style="display:none;">
     <div class="card">
       <div class="row" style="align-items:flex-start;">
@@ -49,8 +59,11 @@
           <span class="badge neutral" id="radius-badge"></span>
           <span class="badge neutral" id="roster-badge"></span>
           <span class="badge warn" id="end-time-badge"></span>
-          <br />
-          <button id="copy-link-btn" class="secondary" style="width:auto; margin-top:8px; padding:6px 12px; font-size:.8rem;">🔗 Copy display link</button>
+          <div style="margin-top:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span style="font-size:.72rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:.04em;">Display on another screen:</span>
+            <span id="display-code" style="font-size:1.3rem; font-weight:700; letter-spacing:.15em; background:var(--surface-2); padding:4px 12px; border-radius:8px;"></span>
+            <button id="copy-link-btn" class="secondary" style="width:auto; margin-top:0; padding:6px 12px; font-size:.8rem;">🔗 Copy link instead</button>
+          </div>
         </div>
         <div style="display:flex; flex-direction:column; gap:8px;">
           <button id="extend-btn" class="secondary" style="margin-top:0;">+5 min</button>
@@ -196,9 +209,11 @@
       document.getElementById('radius-badge').textContent = `📍 ${data.classroom.radiusMeters}m radius`;
       document.getElementById('roster-badge').textContent = rosterSize > 0 ? `👥 ${rosterSize} enrolled` : '👥 open roster';
       document.getElementById('count-label').textContent = rosterSize > 0 ? `Present / ${rosterSize}` : 'Present';
+      document.getElementById('display-code').textContent = data.displayCode || '';
       renderEndTimeBadge();
 
       document.getElementById('setup').style.display = 'none';
+      document.getElementById('join-card').style.display = 'none';
       document.getElementById('live').style.display = 'block';
 
       refreshQR();
@@ -226,6 +241,28 @@
         return false;
       }
     }
+
+    document.getElementById('join-code-btn').onclick = async () => {
+      const codeInput = document.getElementById('join-code');
+      const status = document.getElementById('join-status');
+      const code = codeInput.value.trim().toUpperCase();
+      if (!code) return;
+
+      status.style.display = 'none';
+      try {
+        const res = await fetch(`/api/sessions/by-code/${code}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Session not found');
+        if (!data.active || new Date(data.endTime) <= new Date()) throw new Error('That session has ended.');
+        enterLiveMode(data);
+      } catch (err) {
+        status.style.display = 'block';
+        status.textContent = err.message;
+      }
+    };
+    document.getElementById('join-code').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('join-code-btn').click();
+    });
 
     async function restoreSession() {
       const urlSessionId = new URLSearchParams(location.search).get('session');
