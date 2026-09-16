@@ -77,6 +77,9 @@
           <div class="timer-inner"><span id="timer">10</span></div>
         </div>
       </div>
+      <p class="subtitle" style="text-align:center; margin-top:10px;">
+        Can't show the QR? Have students enter session code <strong id="session-code-fallback"></strong> and live code <strong id="live-code-fallback" style="letter-spacing:.1em;"></strong> instead.
+      </p>
     </div>
 
     <div class="card">
@@ -371,6 +374,8 @@
 
       const canvas = document.getElementById('qr-canvas');
       QRCode.toCanvas(canvas, data.payload, { width: 220 });
+      document.getElementById('session-code-fallback').textContent = data.displayCode || '';
+      document.getElementById('live-code-fallback').textContent = data.shortCode || '';
 
       const secondsLeft = Math.ceil(data.msLeftInWindow / 1000);
       document.getElementById('timer').textContent = secondsLeft + 's';

@@ -23,6 +23,14 @@ function generateToken(secret, sessionId, windowIndex) {
     .slice(0, 10);
 }
 
+// A human-typeable stand-in for the QR — same rotating token, just
+// compressed to 4 digits, for classrooms where the QR can't be displayed
+// (broken projector, etc). Deterministic from the same token, so it carries
+// the exact same rotation/anti-replay guarantee, just less entropy per digit.
+function shortCode(token) {
+  return String(parseInt(token.slice(0, 8), 16) % 10000).padStart(4, '0');
+}
+
 /**
  * Verifies a scanned token against the current window and the previous one
  * (a small grace period so a scan that lands right at a 10s boundary, or that
@@ -42,4 +50,19 @@ function verifyToken(secret, sessionId, windowIndex, token, windowSeconds) {
   return { valid: true };
 }
 
-module.exports = { currentWindow, generateToken, verifyToken };
+/**
+ * Verifies a manually-typed 4-digit code the same way verifyToken verifies a
+ * scanned QR — checks the current window and the previous one (same grace
+ * period), deriving the expected short code from the real rotating token
+ * rather than trusting anything the client sent except the 4 digits typed.
+ */
+function verifyShortCode(secret, sessionId, code, windowSeconds) {
+  const now = currentWindow(windowSeconds);
+  for (const windowIndex of [now, now - 1]) {
+    const token = generateToken(secret, sessionId, windowIndex);
+    if (shortCode(token) === String(code).trim()) return { valid: true };
+  }
+  return { valid: false, reason: 'Code expired or incorrect — check the live code and try again' };
+}
+
+module.exports = { currentWindow, generateToken, verifyToken, shortCode, verifyShortCode };

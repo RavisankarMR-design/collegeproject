@@ -28,6 +28,18 @@
     <label for="qr-file" style="margin-top:14px;">No camera? Upload a photo/screenshot of the QR instead</label>
     <input type="file" id="qr-file" accept="image/*" />
 
+    <p class="footer-note" style="margin-top:10px;">
+      <a href="#" id="code-toggle-link" style="color:var(--accent);">Can't scan the QR? Enter the code instead</a>
+    </p>
+
+    <div id="code-entry" style="display:none; margin-top:10px;">
+      <label for="sessionCode">Session code (from the teacher's screen)</label>
+      <input id="sessionCode" placeholder="e.g. K7Q3RT" style="text-transform:uppercase; letter-spacing:2px;" maxlength="6" autocomplete="off" />
+      <label for="liveCode" style="margin-top:10px;">Live code (changes every 10s)</label>
+      <input id="liveCode" placeholder="e.g. 4821" maxlength="4" inputmode="numeric" autocomplete="off" />
+      <button id="code-submit-btn" style="margin-top:10px;">Submit code</button>
+    </div>
+
     <div id="result"></div>
   </div>
 
@@ -76,11 +88,35 @@
 
     let scanner = null;
 
+    let busyBtnId = 'scan-btn';
+    const busyBtnLabel = { 'scan-btn': 'Scan classroom QR', 'code-submit-btn': 'Submit code' };
     function setBusy(busy, label) {
-      const btn = document.getElementById('scan-btn');
+      const btn = document.getElementById(busyBtnId);
       btn.disabled = busy;
-      btn.innerHTML = busy ? `<span class="spinner"></span>${label}` : 'Scan classroom QR';
+      btn.innerHTML = busy ? `<span class="spinner"></span>${label}` : busyBtnLabel[busyBtnId];
     }
+
+    document.getElementById('code-toggle-link').onclick = (e) => {
+      e.preventDefault();
+      const entry = document.getElementById('code-entry');
+      const isHidden = entry.style.display === 'none';
+      entry.style.display = isHidden ? 'block' : 'none';
+      e.target.textContent = isHidden ? 'Scan the QR instead' : "Can't scan the QR? Enter the code instead";
+    };
+
+    document.getElementById('code-submit-btn').onclick = () => {
+      const rollNo = document.getElementById('rollNo').value.trim();
+      if (!rollNo) { showMsg('Enter your roll number first.', false); return; }
+      if (!validRollNo(rollNo)) { showMsg('Roll number must be 9 digits (e.g. 240701424).', false); return; }
+
+      const sessionCode = document.getElementById('sessionCode').value.trim();
+      const code = document.getElementById('liveCode').value.trim();
+      if (!sessionCode || !code) { showMsg('Enter both the session code and the live code.', false); return; }
+
+      busyBtnId = 'code-submit-btn';
+      document.getElementById('result').innerHTML = '';
+      handleScan({ sessionCode, code }, rollNo);
+    };
 
     function validRollNo(rollNo) {
       if (auth && auth.role === 'admin') return true; // admin uses arbitrary test values
@@ -92,6 +128,7 @@
       if (!rollNo) { showMsg('Enter your roll number first.', false); return; }
       if (!validRollNo(rollNo)) { showMsg('Roll number must be 9 digits (e.g. 240701424).', false); return; }
 
+      busyBtnId = 'scan-btn';
       setBusy(true, 'Opening camera...');
       document.getElementById('reader-frame').style.display = 'block';
       document.getElementById('result').innerHTML = '';
@@ -104,7 +141,7 @@
           await scanner.stop();
           scanner.clear();
           document.getElementById('reader-frame').style.display = 'none';
-          handleScan(decodedText, rollNo);
+          handleScan({ payload: decodedText }, rollNo);
         },
         () => {} // ignore per-frame scan failures
       ).catch((err) => {
@@ -121,12 +158,13 @@
       if (!rollNo) { showMsg('Enter your roll number first.', false); e.target.value = ''; return; }
       if (!validRollNo(rollNo)) { showMsg('Roll number must be 9 digits (e.g. 240701424).', false); e.target.value = ''; return; }
 
+      busyBtnId = 'scan-btn';
       setBusy(true, 'Reading QR image...');
       document.getElementById('result').innerHTML = '';
       const fileScanner = new Html5Qrcode('reader');
       try {
         const decodedText = await fileScanner.scanFile(file, false);
-        handleScan(decodedText, rollNo);
+        handleScan({ payload: decodedText }, rollNo);
       } catch (err) {
         showMsg('Could not read a QR code from that image: ' + (err && err.message ? err.message : err), false);
         setBusy(false);
@@ -139,7 +177,7 @@
       div.innerHTML = `<div class="msg ${ok ? 'ok' : 'err'}">${text}</div>`;
     }
 
-    function handleScan(payload, rollNo) {
+    function handleScan(identity, rollNo) {
       if (!navigator.geolocation) { showMsg('Geolocation not supported on this device.', false); setBusy(false); return; }
 
       setBusy(true, 'Getting GPS fix...');
@@ -147,7 +185,7 @@
         .then(async (pos) => {
           setBusy(true, `Verifying (GPS accuracy ~${Math.round(pos.accuracy)}m)...`);
           const body = {
-            payload,
+            ...identity,
             rollNo,
             lat: pos.lat,
             lng: pos.lng,

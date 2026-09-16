@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const Session = require('../models/Session');
 const Attendance = require('../models/Attendance');
 const FlaggedAttempt = require('../models/FlaggedAttempt');
-const { currentWindow, generateToken } = require('../utils/token');
+const { currentWindow, generateToken, shortCode } = require('../utils/token');
 const { requireAuth } = require('../utils/auth');
 
 const router = express.Router();
@@ -175,7 +175,7 @@ router.get('/:id/current-qr', async (req, res) => {
     const msIntoWindow = Date.now() % (session.windowSeconds * 1000);
     const msLeftInWindow = session.windowSeconds * 1000 - msIntoWindow;
 
-    res.json({ payload, msLeftInWindow });
+    res.json({ payload, msLeftInWindow, shortCode: shortCode(token), displayCode: session.displayCode });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

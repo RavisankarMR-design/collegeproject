@@ -4,7 +4,7 @@ const Session = require('../models/Session');
 const Student = require('../models/Student');
 const Attendance = require('../models/Attendance');
 const FlaggedAttempt = require('../models/FlaggedAttempt');
-const { verifyToken } = require('../utils/token');
+const { verifyToken, verifyShortCode } = require('../utils/token');
 const { distanceMeters } = require('../utils/geo');
 const { requireAuth } = require('../utils/auth');
 
@@ -35,20 +35,22 @@ const MAX_ACCEPTABLE_ACCURACY_METERS = 100;
 
 const router = express.Router();
 
-// Student submits: the raw QR payload they scanned, their roll number, their
-// current GPS coords, and a per-device id generated client-side (see
-// public/student.html) and stored persistently on that device. Identity
-// (email + name) comes only from the verified Google sign-in, never from
-// the request body.
+// Student submits either the raw QR payload they scanned, OR — when the QR
+// can't be displayed (broken projector, etc) — the session's short display
+// code plus the 4-digit rotating code read off the teacher's screen. Either
+// way: their roll number, current GPS coords, and a per-device id generated
+// client-side (see public/student.html) and stored persistently on that
+// device. Identity (email + name) comes only from the verified Google
+// sign-in, never from the request body.
 router.post('/mark', requireAuth('student'), async (req, res) => {
   try {
     const io = req.app.get('io');
     const { email, name, role } = req.user;
     const isAdmin = role === 'admin';
-    const { payload, rollNo, lat, lng, accuracy, deviceId } = req.body;
+    const { payload, sessionCode, code, rollNo, lat, lng, accuracy, deviceId } = req.body;
 
-    if (!payload || !rollNo || lat == null || lng == null || !deviceId) {
-      return res.status(400).json({ error: 'payload, rollNo, lat, lng, deviceId are all required' });
+    if ((!payload && !(sessionCode && code)) || !rollNo || lat == null || lng == null || !deviceId) {
+      return res.status(400).json({ error: 'A QR scan (or session code + live code), rollNo, lat, lng, deviceId are all required' });
     }
 
     if (accuracy != null && accuracy > MAX_ACCEPTABLE_ACCURACY_METERS) {
@@ -57,22 +59,36 @@ router.post('/mark', requireAuth('student'), async (req, res) => {
       });
     }
 
-    const parts = String(payload).split('|');
-    if (parts.length !== 3) return res.status(400).json({ error: 'Malformed QR — please rescan' });
-    const [sessionId, windowIndex, token] = parts;
-    if (!mongoose.Types.ObjectId.isValid(sessionId)) {
-      return res.status(400).json({ error: 'Malformed QR — please rescan' });
-    }
+    let session;
+    if (payload) {
+      const parts = String(payload).split('|');
+      if (parts.length !== 3) return res.status(400).json({ error: 'Malformed QR — please rescan' });
+      const [sessionId, windowIndex, token] = parts;
+      if (!mongoose.Types.ObjectId.isValid(sessionId)) {
+        return res.status(400).json({ error: 'Malformed QR — please rescan' });
+      }
 
-    const session = await Session.findById(sessionId);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-    if (!session.active || Date.now() > session.endTime.getTime()) {
-      return res.status(410).json({ error: 'This session has ended' });
-    }
+      session = await Session.findById(sessionId);
+      if (!session) return res.status(404).json({ error: 'Session not found' });
+      if (!session.active || Date.now() > session.endTime.getTime()) {
+        return res.status(410).json({ error: 'This session has ended' });
+      }
 
-    // 1. Rotating-token check — blocks a QR photo/screenshot taken earlier.
-    const tokenCheck = verifyToken(session.secret, sessionId, windowIndex, token, session.windowSeconds);
-    if (!tokenCheck.valid) return res.status(400).json({ error: tokenCheck.reason });
+      // 1. Rotating-token check — blocks a QR photo/screenshot taken earlier.
+      const tokenCheck = verifyToken(session.secret, sessionId, windowIndex, token, session.windowSeconds);
+      if (!tokenCheck.valid) return res.status(400).json({ error: tokenCheck.reason });
+    } else {
+      session = await Session.findOne({ displayCode: String(sessionCode).trim().toUpperCase() });
+      if (!session) return res.status(404).json({ error: 'Session not found' });
+      if (!session.active || Date.now() > session.endTime.getTime()) {
+        return res.status(410).json({ error: 'This session has ended' });
+      }
+
+      // 1. Rotating-code check — same guarantee as the QR's rotating token,
+      // just typed instead of scanned.
+      const codeCheck = verifyShortCode(session.secret, session._id, code, session.windowSeconds);
+      if (!codeCheck.valid) return res.status(400).json({ error: codeCheck.reason });
+    }
 
     // 2. Geofence check — blocks scanning the (still-valid) QR from outside class,
     //    e.g. a friend photographing/video-calling the live code to someone off-campus.
