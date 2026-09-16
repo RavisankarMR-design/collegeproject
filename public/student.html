@@ -17,7 +17,7 @@
 
   <div class="card">
     <label for="rollNo">Roll number</label>
-    <input id="rollNo" placeholder="e.g. 240701424" autocomplete="off" />
+    <input id="rollNo" placeholder="e.g. 240701424" autocomplete="off" inputmode="numeric" maxlength="9" />
 
     <button id="scan-btn">Scan classroom QR</button>
 
@@ -82,9 +82,15 @@
       btn.innerHTML = busy ? `<span class="spinner"></span>${label}` : 'Scan classroom QR';
     }
 
+    function validRollNo(rollNo) {
+      if (auth && auth.role === 'admin') return true; // admin uses arbitrary test values
+      return /^\d{9}$/.test(rollNo);
+    }
+
     document.getElementById('scan-btn').onclick = () => {
       const rollNo = document.getElementById('rollNo').value.trim();
       if (!rollNo) { showMsg('Enter your roll number first.', false); return; }
+      if (!validRollNo(rollNo)) { showMsg('Roll number must be 9 digits (e.g. 240701424).', false); return; }
 
       setBusy(true, 'Opening camera...');
       document.getElementById('reader-frame').style.display = 'block';
@@ -113,6 +119,7 @@
       if (!file) return;
       const rollNo = document.getElementById('rollNo').value.trim();
       if (!rollNo) { showMsg('Enter your roll number first.', false); e.target.value = ''; return; }
+      if (!validRollNo(rollNo)) { showMsg('Roll number must be 9 digits (e.g. 240701424).', false); e.target.value = ''; return; }
 
       setBusy(true, 'Reading QR image...');
       document.getElementById('result').innerHTML = '';

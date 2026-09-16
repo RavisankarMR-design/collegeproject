@@ -94,9 +94,16 @@ router.post('/mark', requireAuth('student'), async (req, res) => {
     }
     const borderline = distance + margin > radius;
 
+    const normalizedRoll = rollNo.trim().toUpperCase();
+
+    // Roll numbers here are always 9 digits (e.g. 240701424). Admin is
+    // exempt — it uses arbitrary test values, isolated from real students.
+    if (!isAdmin && !/^\d{9}$/.test(normalizedRoll)) {
+      return res.status(400).json({ error: 'Roll number must be 9 digits (e.g. 240701424).' });
+    }
+
     // 3. Roster check — with an enrolled list set, only those roll numbers can
     //    ever be marked present, so a 30-student class can't end up with 31 records.
-    const normalizedRoll = rollNo.trim().toUpperCase();
     if (session.roster.length > 0 && !session.roster.includes(normalizedRoll)) {
       await flag(io, session, { rollNo, name, deviceId }, 'not_enrolled', `Roll number "${rollNo}" is not on this session's roster`, distance, accuracy);
       return res.status(403).json({ error: 'This roll number is not enrolled in this class session.' });
