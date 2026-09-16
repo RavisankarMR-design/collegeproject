@@ -1,17 +1,10 @@
 const jwt = require('jsonwebtoken');
-const { OAuth2Client } = require('google-auth-library');
 
 const ALLOWED_DOMAIN = 'rajalakshmi.edu.in';
 
 // To add a staff member: add their exact @rajalakshmi.edu.in email below.
-// Anyone else with a verified email on the allowed domain is treated as a
-// student. A small hand-maintained list is far more reliable here than
-// guessing from email format (one staff example is not enough patterns to
-// build a safe regex from, and a wrong guess would route a student into the
-// teacher UI).
+// Anyone else with an email on the allowed domain is treated as a student.
 const STAFF_EMAILS = ['bhuvaneswaran@rajalakshmi.edu.in'];
-
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // JWT_SECRET must be a real, stable env var in production — if it falls back
 // to the dev default, every login becomes forgeable. Checked at server
@@ -19,22 +12,20 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-insecure-secret-change-me';
 const SESSION_LIFETIME = '12h'; // a school day, with buffer
 
-// Verifies a Google ID token server-side (never trust a client-supplied
-// email/name directly) and returns our own app identity for it.
-async function verifyGoogleToken(idToken) {
-  const ticket = await client.verifyIdToken({
-    idToken,
-    audience: process.env.GOOGLE_CLIENT_ID,
-  });
-  const payload = ticket.getPayload();
+const EMAIL_RE = /^[a-z0-9._+-]+@rajalakshmi\.edu\.in$/;
 
-  const email = String(payload.email || '').toLowerCase().trim();
-  if (!payload.email_verified || !email.endsWith('@' + ALLOWED_DOMAIN)) {
-    throw new Error(`Only @${ALLOWED_DOMAIN} accounts can sign in.`);
+// ponytail: self-declared email, not Google-verified — anyone can type any
+// @rajalakshmi.edu.in address. Trial skips OAuth for speed; swap in
+// verifyGoogleToken (git history) if real identity verification is needed.
+function verifyEmail(rawEmail) {
+  const email = String(rawEmail || '').toLowerCase().trim();
+  if (!EMAIL_RE.test(email)) {
+    throw new Error(`Enter a valid @${ALLOWED_DOMAIN} email address.`);
   }
 
   const role = STAFF_EMAILS.includes(email) ? 'staff' : 'student';
-  return { email, name: payload.name || email, role };
+  const name = email.split('@')[0].split('.').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  return { email, name, role };
 }
 
 function issueSessionToken({ email, name, role }) {
@@ -62,4 +53,4 @@ function requireAuth(role) {
   };
 }
 
-module.exports = { verifyGoogleToken, issueSessionToken, requireAuth, JWT_SECRET };
+module.exports = { verifyEmail, issueSessionToken, requireAuth, JWT_SECRET };
