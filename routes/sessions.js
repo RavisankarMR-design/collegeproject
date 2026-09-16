@@ -24,9 +24,11 @@ function generateDisplayCode() {
 
 // Past + current sessions for the history page, newest first, with how many
 // students were marked present in each. `secret` must never leave the server.
-router.get('/', async (req, res) => {
+// Staff-only, and scoped to that staff member's own sessions — admin
+// sessions are a separate email and never mix into a staff member's history.
+router.get('/', requireAuth('staff'), async (req, res) => {
   try {
-    const sessions = await Session.find().select('-secret').sort({ startTime: -1 }).limit(100);
+    const sessions = await Session.find({ teacherEmail: req.user.email }).select('-secret').sort({ startTime: -1 }).limit(100);
 
     const counts = await Attendance.aggregate([{ $group: { _id: '$session', count: { $sum: 1 } } }]);
     const countBySession = Object.fromEntries(counts.map((c) => [String(c._id), c.count]));
@@ -55,6 +57,7 @@ router.get('/', async (req, res) => {
 router.post('/', requireAuth('staff'), async (req, res) => {
   try {
     const teacherName = req.user.name;
+    const teacherEmail = req.user.email;
     const { subject, lat, lng, radiusMeters, durationMinutes, roster } = req.body;
     if (!subject || lat == null || lng == null || !durationMinutes) {
       return res.status(400).json({ error: 'subject, lat, lng, durationMinutes are required' });
@@ -73,6 +76,7 @@ router.post('/', requireAuth('staff'), async (req, res) => {
         session = await Session.create({
           subject,
           teacherName,
+          teacherEmail,
           secret: crypto.randomBytes(16).toString('hex'),
           classroom: { lat, lng, radiusMeters: radiusMeters || 30 },
           endTime: new Date(Date.now() + durationMinutes * 60000),

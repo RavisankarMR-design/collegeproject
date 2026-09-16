@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Attendance History</title>
 <link rel="stylesheet" href="style.css" />
+<script src="auth-client.js"></script>
 </head>
 <body>
   <h1>Attendance history</h1>
@@ -56,8 +57,13 @@
       ));
     }
 
+    const auth = requireSignedIn();
+    if (auth && auth.role === 'student') {
+      location.href = 'student.html';
+    }
+
     async function loadSessions() {
-      const res = await fetch('/api/sessions');
+      const res = await authFetch('/api/sessions');
       const sessions = await res.json();
       const ul = document.getElementById('session-list');
 
@@ -126,7 +132,7 @@
       document.getElementById('detail').scrollIntoView({ behavior: 'smooth' });
     }
 
-    loadSessions();
+    if (auth && auth.role !== 'student') loadSessions();
   </script>
 </body>
 </html>

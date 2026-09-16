@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const SessionSchema = new mongoose.Schema({
   subject: { type: String, required: true },
   teacherName: { type: String, required: true },
+  teacherEmail: { type: String, required: true, lowercase: true, trim: true },
   // Never exposed to any client response — used server-side only to compute tokens.
   secret: { type: String, required: true },
   classroom: {
