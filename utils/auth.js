@@ -6,6 +6,10 @@ const ALLOWED_DOMAIN = 'rajalakshmi.edu.in';
 // Anyone else with an email on the allowed domain is treated as a student.
 const STAFF_EMAILS = ['bhuvaneswaran@rajalakshmi.edu.in'];
 
+// Admins bypass the domain check entirely and can access any page/action —
+// no student/staff restriction applies to them.
+const ADMIN_EMAILS = ['mrravisankar7@gmail.com'];
+
 // JWT_SECRET must be a real, stable env var in production — if it falls back
 // to the dev default, every login becomes forgeable. Checked at server
 // startup (see server.js), not silently here.
@@ -19,6 +23,9 @@ const EMAIL_RE = /^[a-z0-9._+-]+@rajalakshmi\.edu\.in$/;
 // verifyGoogleToken (git history) if real identity verification is needed.
 function verifyEmail(rawEmail) {
   const email = String(rawEmail || '').toLowerCase().trim();
+  if (ADMIN_EMAILS.includes(email)) {
+    return { email, name: 'Admin', role: 'admin' };
+  }
   if (!EMAIL_RE.test(email)) {
     throw new Error(`Enter a valid @${ALLOWED_DOMAIN} email address.`);
   }
@@ -42,7 +49,7 @@ function requireAuth(role) {
 
     try {
       const user = jwt.verify(token, JWT_SECRET);
-      if (role && user.role !== role) {
+      if (role && user.role !== role && user.role !== 'admin') {
         return res.status(403).json({ error: `This action requires a ${role} account.` });
       }
       req.user = user;

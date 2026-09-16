@@ -1,4 +1,4 @@
-# Anti-Proxy Attendance System
+# Smart Attendance System
 
 Rotating signed QR + GPS geofence + device binding + roster enforcement +
 flagged-attempt logging + session history. Live at:

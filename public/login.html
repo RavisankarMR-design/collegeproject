@@ -21,7 +21,7 @@
 
   <script>
     function redirectByRole(role) {
-      location.href = role === 'staff' ? 'teacher.html' : 'student.html';
+      location.href = (role === 'staff' || role === 'admin') ? 'teacher.html' : 'student.html';
     }
 
     const existing = getAuth();
