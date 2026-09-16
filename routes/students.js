@@ -23,4 +23,19 @@ router.post('/:rollNo/reset-device', requireAuth('staff'), async (req, res) => {
   }
 });
 
+// Staff-only. Fully releases a roll number — clears both the device lock
+// and the email<->rollNo identity lock (see routes/attendance.js step 4/5).
+// Needed when a roll number got bound to the wrong account (typo, stray
+// test scan, etc) and the affected student can't self-recover otherwise.
+router.post('/:rollNo/reset-identity', requireAuth('staff'), async (req, res) => {
+  try {
+    const rollNo = String(req.params.rollNo).trim().toUpperCase();
+    const student = await Student.findOneAndDelete({ rollNo });
+    if (!student) return res.status(404).json({ error: 'No student found with that roll number.' });
+    res.json({ ok: true, rollNo: student.rollNo, releasedFrom: student.email });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
