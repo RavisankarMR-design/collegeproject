@@ -10,7 +10,7 @@ const FlaggedAttemptSchema = new mongoose.Schema({
   name: { type: String },
   reason: {
     type: String,
-    enum: ['outside_geofence', 'device_mismatch', 'not_enrolled', 'identity_mismatch'],
+    enum: ['outside_geofence', 'device_mismatch', 'not_enrolled', 'identity_mismatch', 'roll_number_changed'],
     required: true,
   },
   detail: { type: String, required: true },

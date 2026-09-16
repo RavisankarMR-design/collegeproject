@@ -138,24 +138,26 @@ router.post('/mark', requireAuth('student'), async (req, res) => {
       student = await Student.findOne({ email });
       if (!student) student = await Student.create({ email, rollNo: 'ADMIN-TEST', name });
     } else {
-      // Identity consistency — the verified email is the real anchor now,
-      // not the self-typed roll number. A signed-in student can't suddenly
-      // claim a different roll number than the one their account first
-      // used, and a roll number can't suddenly belong to a different
-      // account, either direction would mean someone is scanning in under
-      // an identity that isn't consistently theirs.
+      // Identity consistency — still blocks two different accounts from
+      // claiming the same roll number. But a signed-in account correcting
+      // its OWN roll number (mistyped it the first time) is no longer
+      // blocked — no self-service fix existed for that until real college
+      // DB roll numbers are wired in, so for now it just overwrites the
+      // roll on the account and logs a flag for the teacher to see.
       const [studentByEmail, studentByRoll] = await Promise.all([
         Student.findOne({ email }),
         Student.findOne({ rollNo: normalizedRoll }),
       ]);
 
-      if (studentByEmail && studentByEmail.rollNo !== normalizedRoll) {
-        await flag(io, session, { rollNo, name, deviceId }, 'identity_mismatch', `Account ${email} is already registered under roll number "${studentByEmail.rollNo}"`, distance, accuracy);
-        return res.status(403).json({ error: `Your account is already registered under roll number ${studentByEmail.rollNo}.` });
-      }
       if (studentByRoll && studentByRoll.email !== email) {
         await flag(io, session, { rollNo, name, deviceId }, 'identity_mismatch', `Roll number "${normalizedRoll}" is already registered to a different account`, distance, accuracy);
         return res.status(403).json({ error: 'This roll number is already registered to a different account.' });
+      }
+      if (studentByEmail && studentByEmail.rollNo !== normalizedRoll) {
+        const oldRoll = studentByEmail.rollNo;
+        studentByEmail.rollNo = normalizedRoll;
+        await studentByEmail.save();
+        await flag(io, session, { rollNo, name, deviceId }, 'roll_number_changed', `Account switched from roll "${oldRoll}" to "${normalizedRoll}"`, distance, accuracy);
       }
 
       // Device-binding check — a device can only ever be the first-binder
