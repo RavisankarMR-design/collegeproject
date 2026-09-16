@@ -43,7 +43,8 @@ const router = express.Router();
 router.post('/mark', requireAuth('student'), async (req, res) => {
   try {
     const io = req.app.get('io');
-    const { email, name } = req.user;
+    const { email, name, role } = req.user;
+    const isAdmin = role === 'admin';
     const { payload, rollNo, lat, lng, accuracy, deviceId } = req.body;
 
     if (!payload || !rollNo || lat == null || lng == null || !deviceId) {
@@ -101,49 +102,63 @@ router.post('/mark', requireAuth('student'), async (req, res) => {
       return res.status(403).json({ error: 'This roll number is not enrolled in this class session.' });
     }
 
-    // 4. Identity consistency — the verified email is the real anchor now,
-    //    not the self-typed roll number. A signed-in student can't suddenly
-    //    claim a different roll number than the one their account first
-    //    used, and a roll number can't suddenly belong to a different
-    //    account, either direction would mean someone is scanning in under
-    //    an identity that isn't consistently theirs.
-    const [studentByEmail, studentByRoll] = await Promise.all([
-      Student.findOne({ email }),
-      Student.findOne({ rollNo: normalizedRoll }),
-    ]);
+    // 4/5. Identity consistency + device binding — skipped entirely for
+    // admin. Admin is a testing/demo account, not a real student: it must
+    // never touch the deviceId uniqueness lock (that would burn a real
+    // device slot or get locked out by one) or the email<->rollNo lock
+    // (admin needs to run arbitrary roll numbers through the flow).
+    let student;
+    if (isAdmin) {
+      // A fixed, namespaced roll number — never whatever the admin typed —
+      // so a test scan can never occupy (or collide with) a real student's
+      // roll number in the shared Student collection.
+      student = await Student.findOne({ email });
+      if (!student) student = await Student.create({ email, rollNo: 'ADMIN-TEST', name });
+    } else {
+      // Identity consistency — the verified email is the real anchor now,
+      // not the self-typed roll number. A signed-in student can't suddenly
+      // claim a different roll number than the one their account first
+      // used, and a roll number can't suddenly belong to a different
+      // account, either direction would mean someone is scanning in under
+      // an identity that isn't consistently theirs.
+      const [studentByEmail, studentByRoll] = await Promise.all([
+        Student.findOne({ email }),
+        Student.findOne({ rollNo: normalizedRoll }),
+      ]);
 
-    if (studentByEmail && studentByEmail.rollNo !== normalizedRoll) {
-      await flag(io, session, { rollNo, name, deviceId }, 'identity_mismatch', `Account ${email} is already registered under roll number "${studentByEmail.rollNo}"`, distance, accuracy);
-      return res.status(403).json({ error: `Your account is already registered under roll number ${studentByEmail.rollNo}.` });
-    }
-    if (studentByRoll && studentByRoll.email !== email) {
-      await flag(io, session, { rollNo, name, deviceId }, 'identity_mismatch', `Roll number "${normalizedRoll}" is already registered to a different account`, distance, accuracy);
-      return res.status(403).json({ error: 'This roll number is already registered to a different account.' });
-    }
+      if (studentByEmail && studentByEmail.rollNo !== normalizedRoll) {
+        await flag(io, session, { rollNo, name, deviceId }, 'identity_mismatch', `Account ${email} is already registered under roll number "${studentByEmail.rollNo}"`, distance, accuracy);
+        return res.status(403).json({ error: `Your account is already registered under roll number ${studentByEmail.rollNo}.` });
+      }
+      if (studentByRoll && studentByRoll.email !== email) {
+        await flag(io, session, { rollNo, name, deviceId }, 'identity_mismatch', `Roll number "${normalizedRoll}" is already registered to a different account`, distance, accuracy);
+        return res.status(403).json({ error: 'This roll number is already registered to a different account.' });
+      }
 
-    // 5. Device-binding check — a device can only ever be the first-binder
-    //    for one student (models/Student.js enforces this with a unique
-    //    index on deviceId), so one phone can't mark several different
-    //    people present across their first-ever scans.
-    let student = studentByEmail;
-    try {
-      if (!student) {
-        student = await Student.create({ email, rollNo: normalizedRoll, name, deviceId });
-      } else if (!student.deviceId) {
-        student.deviceId = deviceId;
-        await student.save();
-      } else if (student.deviceId !== deviceId) {
-        await flag(io, session, { rollNo, name, deviceId }, 'device_mismatch', 'Account already bound to a different device', distance, accuracy);
-        return res.status(403).json({
-          error: 'Your account is already bound to a different device. Ask the teacher to reset it if this is a new phone.',
-        });
+      // Device-binding check — a device can only ever be the first-binder
+      // for one student (models/Student.js enforces this with a unique
+      // index on deviceId), so one phone can't mark several different
+      // people present across their first-ever scans.
+      student = studentByEmail;
+      try {
+        if (!student) {
+          student = await Student.create({ email, rollNo: normalizedRoll, name, deviceId });
+        } else if (!student.deviceId) {
+          student.deviceId = deviceId;
+          await student.save();
+        } else if (student.deviceId !== deviceId) {
+          await flag(io, session, { rollNo, name, deviceId }, 'device_mismatch', 'Account already bound to a different device', distance, accuracy);
+          return res.status(403).json({
+            error: 'Your account is already bound to a different device. Ask the teacher to reset it if this is a new phone.',
+          });
+        }
+      } catch (err) {
+        if (err.code === 11000) {
+          await flag(io, session, { rollNo, name, deviceId }, 'device_mismatch', 'This device is already registered to a different account', distance, accuracy);
+          return res.status(403).json({ error: 'This device is already registered to a different account.' });
+        }
+        throw err;
       }
-    } catch (err) {
-      if (err.code === 11000) {
-        await flag(io, session, { rollNo, name, deviceId }, 'device_mismatch', 'This device is already registered to a different account', distance, accuracy);
-        return res.status(403).json({ error: 'This device is already registered to a different account.' });
-      }
-      throw err;
     }
 
     // 6. Duplicate-scan check — the unique (session, student) index does the
