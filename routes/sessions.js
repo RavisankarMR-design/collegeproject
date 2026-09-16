@@ -193,36 +193,71 @@ router.get('/:id/attendance', async (req, res) => {
   }
 });
 
-// Attendance for one session as a downloadable CSV.
-// deviceId is deliberately left out — it's a fingerprint hash the teacher has
-// no use for, and this endpoint is unauthenticated.
+// Shared by the CSV and Excel exports below — deviceId is deliberately left
+// out, it's a fingerprint hash the teacher has no use for.
+async function loadExportRows(sessionId) {
+  const session = await Session.findById(sessionId).select('-secret');
+  if (!session) return null;
+
+  const records = await Attendance.find({ session: session._id })
+    .populate('student', 'rollNo name')
+    .sort({ markedAt: 1 });
+
+  const rows = [
+    ['Roll No', 'Name', 'Marked At', 'Distance (m)', 'GPS Accuracy (m)', 'Borderline'],
+    ...records.map((r) => [
+      r.student ? r.student.rollNo : '',
+      r.student ? r.student.name : '',
+      new Date(r.markedAt).toISOString(),
+      Math.round(r.distanceMeters),
+      r.accuracyMeters == null ? '' : Math.round(r.accuracyMeters),
+      r.borderline ? 'yes' : '',
+    ]),
+  ];
+
+  const filenameBase = `attendance-${session.subject.replace(/[^a-z0-9]+/gi, '-')}-${new Date(session.startTime).toISOString().slice(0, 10)}`;
+  return { rows, filenameBase };
+}
+
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+// Attendance for one session as a downloadable CSV. This endpoint is
+// unauthenticated (see the read-only session-display design note elsewhere
+// in this file).
 router.get('/:id/export.csv', async (req, res) => {
   try {
-    const session = await Session.findById(req.params.id).select('-secret');
-    if (!session) return res.status(404).json({ error: 'Session not found' });
+    const data = await loadExportRows(req.params.id);
+    if (!data) return res.status(404).json({ error: 'Session not found' });
 
-    const records = await Attendance.find({ session: session._id })
-      .populate('student', 'rollNo name')
-      .sort({ markedAt: 1 });
-
-    const rows = [
-      ['Roll No', 'Name', 'Marked At', 'Distance (m)', 'GPS Accuracy (m)', 'Borderline'],
-      ...records.map((r) => [
-        r.student ? r.student.rollNo : '',
-        r.student ? r.student.name : '',
-        new Date(r.markedAt).toISOString(),
-        Math.round(r.distanceMeters),
-        r.accuracyMeters == null ? '' : Math.round(r.accuracyMeters),
-        r.borderline ? 'yes' : '',
-      ]),
-    ];
-
-    const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n');
-    const filename = `attendance-${session.subject.replace(/[^a-z0-9]+/gi, '-')}-${new Date(session.startTime).toISOString().slice(0, 10)}.csv`;
-
+    const csv = data.rows.map((row) => row.map(csvCell).join(',')).join('\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${data.filenameBase}.csv"`);
     res.send(csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Same data as an .xls file Excel opens directly — an HTML table served
+// with the Excel MIME type/extension, no xlsx-writing library needed.
+router.get('/:id/export.xls', async (req, res) => {
+  try {
+    const data = await loadExportRows(req.params.id);
+    if (!data) return res.status(404).json({ error: 'Session not found' });
+
+    const [header, ...body] = data.rows;
+    const html = `<html><head><meta charset="utf-8"></head><body><table>
+      <tr>${header.map((c) => `<th>${escHtml(c)}</th>`).join('')}</tr>
+      ${body.map((row) => `<tr>${row.map((c) => `<td>${escHtml(c)}</td>`).join('')}</tr>`).join('\n')}
+    </table></body></html>`;
+
+    res.setHeader('Content-Type', 'application/vnd.ms-excel; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${data.filenameBase}.xls"`);
+    res.send(html);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -31,7 +31,10 @@ function verifyEmail(rawEmail) {
   }
 
   const role = STAFF_EMAILS.includes(email) ? 'staff' : 'student';
-  const name = email.split('@')[0].split('.').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  // Just the first dot-separated segment (e.g. "ravisankar.mr.2024.cse" ->
+  // "Ravisankar") — the rest (initials, year, branch) isn't part of the name.
+  const firstSegment = email.split('@')[0].split('.')[0];
+  const name = firstSegment.charAt(0).toUpperCase() + firstSegment.slice(1);
   return { email, name, role };
 }
 

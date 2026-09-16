@@ -24,9 +24,14 @@
           <span class="badge neutral" id="detail-when"></span>
           <span class="badge neutral" id="detail-roster"></span>
         </div>
-        <a id="csv-link" href="#" style="text-decoration:none; flex:0 0 auto;">
-          <button class="secondary" style="margin-top:0;">Download CSV</button>
-        </a>
+        <div style="display:flex; gap:8px; flex:0 0 auto;">
+          <a id="csv-link" href="#" style="text-decoration:none;">
+            <button class="secondary" style="margin-top:0;">Download CSV</button>
+          </a>
+          <a id="xls-link" href="#" style="text-decoration:none;">
+            <button class="secondary" style="margin-top:0;">Download Excel</button>
+          </a>
+        </div>
       </div>
     </div>
 
@@ -104,6 +109,7 @@
       document.getElementById('detail-roster').textContent =
         session.rosterSize > 0 ? `👥 ${session.rosterSize} enrolled` : '👥 open roster';
       document.getElementById('csv-link').href = `/api/sessions/${id}/export.csv`;
+      document.getElementById('xls-link').href = `/api/sessions/${id}/export.xls`;
 
       document.getElementById('detail-count').textContent = records.length;
       document.getElementById('detail-present').innerHTML = records.length
