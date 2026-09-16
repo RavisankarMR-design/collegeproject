@@ -1,13 +1,23 @@
 const mongoose = require('mongoose');
 
 const StudentSchema = new mongoose.Schema({
-  // Stored uppercase so a roll number is one student regardless of how the
-  // student typed it — case variants used to create separate student records.
-  rollNo: { type: String, required: true, unique: true, trim: true, uppercase: true },
+  // The real identity anchor, now that login is Google-verified — unlike
+  // rollNo (self-typed every scan), this can't be faked or mistyped as
+  // someone else's.
+  email: { type: String, required: true, unique: true, trim: true, lowercase: true },
+  // Stored uppercase so a roll number is one value regardless of how it was
+  // typed. Bound to this email on first scan (see routes/attendance.js) and
+  // rejected as a mismatch if a later scan from the same email types a
+  // different one — so one verified person can't drift across roll numbers
+  // by mistake or on purpose.
+  rollNo: { type: String, required: true, uppercase: true, trim: true },
   name: { type: String, required: true },
-  // Set on first successful scan. Any later scan for this roll number must
-  // come from the same device, or it's rejected as a likely proxy.
-  deviceId: { type: String, default: null },
+  // Set on first successful scan. unique+sparse: a device can only ever be
+  // the first-binder for one student, globally — closes the gap where one
+  // phone marked several different roll numbers present (confirmed live
+  // before this fix). sparse allows many students to still have deviceId:
+  // null before their first scan.
+  deviceId: { type: String, default: null, unique: true, sparse: true },
 });
 
 module.exports = mongoose.model('Student', StudentSchema);

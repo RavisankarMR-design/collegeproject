@@ -7,17 +7,17 @@
 <link rel="stylesheet" href="style.css" />
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="geo-filter.js"></script>
+<script src="auth-client.js"></script>
 </head>
 <body>
   <h1>Mark attendance</h1>
-  <p class="subtitle">Scan the QR shown in class. You must be physically in the room — the code checks your location too.</p>
+  <p class="subtitle">Scan the QR shown in class. You must be physically in the room — the code checks your location too.
+    <span id="signed-in-as" style="display:block; margin-top:4px;"></span>
+  </p>
 
   <div class="card">
     <label for="rollNo">Roll number</label>
     <input id="rollNo" placeholder="e.g. 21CS001" autocomplete="off" />
-
-    <label for="name">Full name</label>
-    <input id="name" placeholder="e.g. Jane Doe" autocomplete="off" />
 
     <button id="scan-btn">Scan classroom QR</button>
 
@@ -34,6 +34,13 @@
   <p class="footer-note">Protected by rotating token + GPS geofence + device binding</p>
 
   <script>
+    const auth = requireSignedIn();
+    if (auth) {
+      document.getElementById('signed-in-as').innerHTML =
+        `Signed in as ${auth.name} (${auth.email}) — <a href="#" id="sign-out-link" style="color:var(--text-dim);">sign out</a>`;
+      document.getElementById('sign-out-link').onclick = (e) => { e.preventDefault(); signOut(); };
+    }
+
     // Device id derived from stable browser/hardware signals (canvas render +
     // navigator/screen properties) instead of a random UUID, so clearing
     // localStorage/private-window no longer resets a student's binding.
@@ -77,8 +84,7 @@
 
     document.getElementById('scan-btn').onclick = () => {
       const rollNo = document.getElementById('rollNo').value.trim();
-      const name = document.getElementById('name').value.trim();
-      if (!rollNo || !name) { showMsg('Enter your roll number and name first.', false); return; }
+      if (!rollNo) { showMsg('Enter your roll number first.', false); return; }
 
       setBusy(true, 'Opening camera...');
       document.getElementById('reader-frame').style.display = 'block';
@@ -92,7 +98,7 @@
           await scanner.stop();
           scanner.clear();
           document.getElementById('reader-frame').style.display = 'none';
-          handleScan(decodedText, rollNo, name);
+          handleScan(decodedText, rollNo);
         },
         () => {} // ignore per-frame scan failures
       ).catch((err) => {
@@ -106,15 +112,14 @@
       const file = e.target.files[0];
       if (!file) return;
       const rollNo = document.getElementById('rollNo').value.trim();
-      const name = document.getElementById('name').value.trim();
-      if (!rollNo || !name) { showMsg('Enter your roll number and name first.', false); e.target.value = ''; return; }
+      if (!rollNo) { showMsg('Enter your roll number first.', false); e.target.value = ''; return; }
 
       setBusy(true, 'Reading QR image...');
       document.getElementById('result').innerHTML = '';
       const fileScanner = new Html5Qrcode('reader');
       try {
         const decodedText = await fileScanner.scanFile(file, false);
-        handleScan(decodedText, rollNo, name);
+        handleScan(decodedText, rollNo);
       } catch (err) {
         showMsg('Could not read a QR code from that image: ' + (err && err.message ? err.message : err), false);
         setBusy(false);
@@ -127,7 +132,7 @@
       div.innerHTML = `<div class="msg ${ok ? 'ok' : 'err'}">${text}</div>`;
     }
 
-    function handleScan(payload, rollNo, name) {
+    function handleScan(payload, rollNo) {
       if (!navigator.geolocation) { showMsg('Geolocation not supported on this device.', false); setBusy(false); return; }
 
       setBusy(true, 'Getting GPS fix...');
@@ -137,13 +142,12 @@
           const body = {
             payload,
             rollNo,
-            name,
             lat: pos.lat,
             lng: pos.lng,
             accuracy: pos.accuracy,
             deviceId: await getDeviceId(),
           };
-          const res = await fetch('/api/attendance/mark', {
+          const res = await authFetch('/api/attendance/mark', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),

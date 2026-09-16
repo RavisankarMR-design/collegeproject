@@ -8,6 +8,16 @@ const { Server } = require('socket.io');
 
 const sessionRoutes = require('./routes/sessions');
 const attendanceRoutes = require('./routes/attendance');
+const authRoutes = require('./routes/auth');
+const studentRoutes = require('./routes/students');
+const { JWT_SECRET } = require('./utils/auth');
+
+if (JWT_SECRET === 'dev-only-insecure-secret-change-me') {
+  console.warn('WARNING: JWT_SECRET is not set — using an insecure default. Every login session can be forged. Set a real JWT_SECRET env var.');
+}
+if (!process.env.GOOGLE_CLIENT_ID) {
+  console.warn('WARNING: GOOGLE_CLIENT_ID is not set — sign-in will fail until it is.');
+}
 
 const app = express();
 app.use(cors());
@@ -16,6 +26,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/attendance', attendanceRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/students', studentRoutes);
 
 const server = http.createServer(app);
 // Rooms are keyed by sessionId, so a push only reaches teacher panels

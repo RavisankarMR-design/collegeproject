@@ -8,18 +8,18 @@
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script src="geo-filter.js"></script>
+<script src="auth-client.js"></script>
 </head>
 <body>
   <h1>Start a class session</h1>
   <p class="subtitle">The QR rotates every 10s and only counts inside the classroom radius.
     <a href="history.html" style="color:var(--accent);">View past sessions →</a></p>
 
-  <div id="setup" class="card">
+  <div id="auth-banner" class="msg info" style="margin-bottom:16px;"></div>
+
+  <div id="setup" class="card" style="display:none;">
     <label for="subject">Subject</label>
     <input id="subject" placeholder="e.g. CS301 — Operating Systems" />
-
-    <label for="teacherName">Your name</label>
-    <input id="teacherName" placeholder="e.g. Prof. Rao" />
 
     <div class="row">
       <div>
@@ -106,6 +106,34 @@
   <script>
     let lat = null, lng = null, sessionId = null, windowSeconds = 10, rosterSize = 0, sessionEndTime = null;
 
+    // The setup form (start a new session) needs a staff account; the join
+    // card below it (display an existing session on a second screen, e.g. a
+    // smart board) deliberately does NOT — gating the whole page behind
+    // sign-in would add back the exact friction the join-code feature was
+    // built to remove for that device.
+    (function renderAuthBanner() {
+      const auth = getAuth();
+      const banner = document.getElementById('auth-banner');
+      const setup = document.getElementById('setup');
+
+      if (!auth) {
+        banner.className = 'msg info';
+        banner.innerHTML = 'Not signed in — <a href="login.html" style="color:var(--accent);">sign in with your staff account</a> to start a session. Displaying an existing session below works without signing in.';
+        setup.style.display = 'none';
+      } else if (auth.role !== 'staff') {
+        banner.className = 'msg info';
+        banner.innerHTML = `Signed in as ${esc(auth.name)} (${esc(auth.email)}) — this account can't start a session. <a href="#" id="sign-out-link" style="color:var(--accent);">Sign out</a>`;
+        setup.style.display = 'none';
+      } else {
+        banner.className = 'msg ok';
+        banner.innerHTML = `Signed in as ${esc(auth.name)} — <a href="#" id="sign-out-link" style="color:var(--text-dim);">sign out</a>`;
+        setup.style.display = 'block';
+      }
+
+      const signOutLink = document.getElementById('sign-out-link');
+      if (signOutLink) signOutLink.onclick = (e) => { e.preventDefault(); signOut(); };
+    })();
+
     // Pushes an instant refresh the moment a student is marked present or
     // flagged, instead of waiting for the next poll (up to 3s away). Polling
     // stays in place underneath as a fallback if the socket ever drops.
@@ -143,6 +171,7 @@
       outside_geofence: 'Outside classroom',
       device_mismatch: 'Device mismatch',
       not_enrolled: 'Not enrolled',
+      identity_mismatch: 'Identity mismatch',
     };
 
     // Roll numbers and names are student-supplied and rendered via innerHTML,
@@ -192,18 +221,17 @@
 
     document.getElementById('start-btn').onclick = async () => {
       const subject = document.getElementById('subject').value.trim();
-      const teacherName = document.getElementById('teacherName').value.trim();
       const radiusMeters = Number(document.getElementById('radius').value) || 30;
       const durationMinutes = Number(document.getElementById('duration').value) || 55;
       const roster = document.getElementById('roster').value
         .split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
 
-      if (!subject || !teacherName) { alert('Subject and name are required'); return; }
+      if (!subject) { alert('Subject is required'); return; }
 
-      const res = await fetch('/api/sessions', {
+      const res = await authFetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, teacherName, lat, lng, radiusMeters, durationMinutes, roster }),
+        body: JSON.stringify({ subject, lat, lng, radiusMeters, durationMinutes, roster }),
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error); return; }
@@ -312,7 +340,7 @@
       // leaving it stuck disabled with zero visible feedback — looked
       // exactly like "the button doesn't work" with no way to tell why.
       try {
-        const res = await fetch(`/api/sessions/${sessionId}/extend`, {
+        const res = await authFetch(`/api/sessions/${sessionId}/extend`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ minutes: 5 }),
@@ -330,7 +358,7 @@
 
     document.getElementById('end-btn').onclick = async () => {
       if (!confirm('End this session? Students will no longer be able to mark attendance.')) return;
-      await fetch(`/api/sessions/${sessionId}/end`, { method: 'POST' });
+      await authFetch(`/api/sessions/${sessionId}/end`, { method: 'POST' });
       localStorage.removeItem('active_session');
       alert('Session ended.');
       location.reload();

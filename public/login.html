@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sign in</title>
+<link rel="stylesheet" href="style.css" />
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="auth-client.js"></script>
+</head>
+<body>
+  <h1>Sign in</h1>
+  <p class="subtitle">Use your @rajalakshmi.edu.in Google account. Staff go to the teacher panel automatically, everyone else to the student page.</p>
+
+  <div class="card" style="text-align:center;">
+    <div id="signin-status" class="msg info" style="display:none;"></div>
+    <div id="g_id_button" style="display:flex; justify-content:center; margin-top:8px;"></div>
+  </div>
+
+  <p class="footer-note"><a href="index.html" style="color:var(--text-dim);">← Back</a></p>
+
+  <script>
+    function redirectByRole(role) {
+      location.href = role === 'staff' ? 'teacher.html' : 'student.html';
+    }
+
+    const existing = getAuth();
+    if (existing) redirectByRole(existing.role);
+
+    async function handleCredentialResponse(response) {
+      const status = document.getElementById('signin-status');
+      status.style.display = 'block';
+      status.className = 'msg info';
+      status.textContent = 'Signing in...';
+
+      try {
+        const res = await fetch('/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential: response.credential }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Sign-in failed');
+
+        localStorage.setItem(AUTH_KEY, JSON.stringify(data));
+        status.className = 'msg ok';
+        status.textContent = `Signed in as ${data.name} (${data.role}) — redirecting...`;
+        setTimeout(() => redirectByRole(data.role), 500);
+      } catch (err) {
+        status.className = 'msg err';
+        status.textContent = err.message;
+      }
+    }
+
+    (async function init() {
+      const status = document.getElementById('signin-status');
+      const { googleClientId } = await fetch('/api/auth/config').then((r) => r.json());
+      if (!googleClientId) {
+        status.style.display = 'block';
+        status.className = 'msg err';
+        status.textContent = 'Sign-in isn’t configured yet — ask the app owner to set GOOGLE_CLIENT_ID.';
+        return;
+      }
+
+      google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleCredentialResponse,
+      });
+      google.accounts.id.renderButton(document.getElementById('g_id_button'), {
+        theme: 'outline', size: 'large', width: 280,
+      });
+    })();
+  </script>
+</body>
+</html>

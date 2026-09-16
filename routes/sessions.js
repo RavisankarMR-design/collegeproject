@@ -4,6 +4,7 @@ const Session = require('../models/Session');
 const Attendance = require('../models/Attendance');
 const FlaggedAttempt = require('../models/FlaggedAttempt');
 const { currentWindow, generateToken } = require('../utils/token');
+const { requireAuth } = require('../utils/auth');
 
 const router = express.Router();
 
@@ -48,12 +49,15 @@ router.get('/', async (req, res) => {
 // Teacher starts a session. classroom lat/lng is normally captured from the
 // teacher's own device (browser Geolocation API) at the moment class starts.
 // `roster` (optional) is the list of roll numbers enrolled in this class —
-// when set, only those roll numbers can be marked present.
-router.post('/', async (req, res) => {
+// when set, only those roll numbers can be marked present. teacherName comes
+// from the verified Google sign-in, not a typed field — only a signed-in
+// staff account can start a session at all now.
+router.post('/', requireAuth('staff'), async (req, res) => {
   try {
-    const { subject, teacherName, lat, lng, radiusMeters, durationMinutes, roster } = req.body;
-    if (!subject || !teacherName || lat == null || lng == null || !durationMinutes) {
-      return res.status(400).json({ error: 'subject, teacherName, lat, lng, durationMinutes are required' });
+    const teacherName = req.user.name;
+    const { subject, lat, lng, radiusMeters, durationMinutes, roster } = req.body;
+    if (!subject || lat == null || lng == null || !durationMinutes) {
+      return res.status(400).json({ error: 'subject, lat, lng, durationMinutes are required' });
     }
 
     const normalizedRoster = Array.isArray(roster)
@@ -221,7 +225,7 @@ router.get('/:id/export.csv', async (req, res) => {
 });
 
 // Push a live session's end time further out, e.g. class ran long.
-router.post('/:id/extend', async (req, res) => {
+router.post('/:id/extend', requireAuth('staff'), async (req, res) => {
   try {
     const minutes = Number(req.body.minutes) || 15;
     const session = await Session.findById(req.params.id);
@@ -239,7 +243,7 @@ router.post('/:id/extend', async (req, res) => {
   }
 });
 
-router.post('/:id/end', async (req, res) => {
+router.post('/:id/end', requireAuth('staff'), async (req, res) => {
   try {
     const session = await Session.findByIdAndUpdate(req.params.id, { active: false }, { new: true });
     if (!session) return res.status(404).json({ error: 'Session not found' });

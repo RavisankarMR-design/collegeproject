@@ -6,6 +6,7 @@ const Attendance = require('../models/Attendance');
 const FlaggedAttempt = require('../models/FlaggedAttempt');
 const { verifyToken } = require('../utils/token');
 const { distanceMeters } = require('../utils/geo');
+const { requireAuth } = require('../utils/auth');
 
 async function flag(io, session, { rollNo, name, deviceId }, reason, detail, distance, accuracy) {
   try {
@@ -34,16 +35,19 @@ const MAX_ACCEPTABLE_ACCURACY_METERS = 100;
 
 const router = express.Router();
 
-// Student submits: the raw QR payload they scanned, their roll no/name,
-// their current GPS coords, and a per-device id generated client-side
-// (see public/student.html) and stored persistently on that device.
-router.post('/mark', async (req, res) => {
+// Student submits: the raw QR payload they scanned, their roll number, their
+// current GPS coords, and a per-device id generated client-side (see
+// public/student.html) and stored persistently on that device. Identity
+// (email + name) comes only from the verified Google sign-in, never from
+// the request body.
+router.post('/mark', requireAuth('student'), async (req, res) => {
   try {
     const io = req.app.get('io');
-    const { payload, rollNo, name, lat, lng, accuracy, deviceId } = req.body;
+    const { email, name } = req.user;
+    const { payload, rollNo, lat, lng, accuracy, deviceId } = req.body;
 
-    if (!payload || !rollNo || !name || lat == null || lng == null || !deviceId) {
-      return res.status(400).json({ error: 'payload, rollNo, name, lat, lng, deviceId are all required' });
+    if (!payload || !rollNo || lat == null || lng == null || !deviceId) {
+      return res.status(400).json({ error: 'payload, rollNo, lat, lng, deviceId are all required' });
     }
 
     if (accuracy != null && accuracy > MAX_ACCEPTABLE_ACCURACY_METERS) {
@@ -97,25 +101,52 @@ router.post('/mark', async (req, res) => {
       return res.status(403).json({ error: 'This roll number is not enrolled in this class session.' });
     }
 
-    // 4. Device-binding check — blocks one phone marking attendance for
-    //    multiple roll numbers.
-    // Always key the student off the normalized roll number — looking up the
-    // raw one let "21cs001" and "21CS001" become two separate students, which
-    // silently bypassed both the device binding and the per-session unique index.
-    let student = await Student.findOne({ rollNo: normalizedRoll });
-    if (!student) {
-      student = await Student.create({ rollNo: normalizedRoll, name, deviceId });
-    } else if (!student.deviceId) {
-      student.deviceId = deviceId;
-      await student.save();
-    } else if (student.deviceId !== deviceId) {
-      await flag(io, session, { rollNo, name, deviceId }, 'device_mismatch', 'Roll number already bound to a different device', distance, accuracy);
-      return res.status(403).json({
-        error: 'This roll number is already bound to a different device. Ask the teacher/admin to reset it if this is a new phone.',
-      });
+    // 4. Identity consistency — the verified email is the real anchor now,
+    //    not the self-typed roll number. A signed-in student can't suddenly
+    //    claim a different roll number than the one their account first
+    //    used, and a roll number can't suddenly belong to a different
+    //    account, either direction would mean someone is scanning in under
+    //    an identity that isn't consistently theirs.
+    const [studentByEmail, studentByRoll] = await Promise.all([
+      Student.findOne({ email }),
+      Student.findOne({ rollNo: normalizedRoll }),
+    ]);
+
+    if (studentByEmail && studentByEmail.rollNo !== normalizedRoll) {
+      await flag(io, session, { rollNo, name, deviceId }, 'identity_mismatch', `Account ${email} is already registered under roll number "${studentByEmail.rollNo}"`, distance, accuracy);
+      return res.status(403).json({ error: `Your account is already registered under roll number ${studentByEmail.rollNo}.` });
+    }
+    if (studentByRoll && studentByRoll.email !== email) {
+      await flag(io, session, { rollNo, name, deviceId }, 'identity_mismatch', `Roll number "${normalizedRoll}" is already registered to a different account`, distance, accuracy);
+      return res.status(403).json({ error: 'This roll number is already registered to a different account.' });
     }
 
-    // 5. Duplicate-scan check — the unique (session, student) index does the
+    // 5. Device-binding check — a device can only ever be the first-binder
+    //    for one student (models/Student.js enforces this with a unique
+    //    index on deviceId), so one phone can't mark several different
+    //    people present across their first-ever scans.
+    let student = studentByEmail;
+    try {
+      if (!student) {
+        student = await Student.create({ email, rollNo: normalizedRoll, name, deviceId });
+      } else if (!student.deviceId) {
+        student.deviceId = deviceId;
+        await student.save();
+      } else if (student.deviceId !== deviceId) {
+        await flag(io, session, { rollNo, name, deviceId }, 'device_mismatch', 'Account already bound to a different device', distance, accuracy);
+        return res.status(403).json({
+          error: 'Your account is already bound to a different device. Ask the teacher to reset it if this is a new phone.',
+        });
+      }
+    } catch (err) {
+      if (err.code === 11000) {
+        await flag(io, session, { rollNo, name, deviceId }, 'device_mismatch', 'This device is already registered to a different account', distance, accuracy);
+        return res.status(403).json({ error: 'This device is already registered to a different account.' });
+      }
+      throw err;
+    }
+
+    // 6. Duplicate-scan check — the unique (session, student) index does the
     //    actual enforcement; this catch just turns the DB error into a clean message.
     try {
       const record = await Attendance.create({
