@@ -120,13 +120,13 @@
         banner.className = 'msg info';
         banner.innerHTML = 'Not signed in — <a href="login.html" style="color:var(--accent);">sign in with your staff account</a> to start a session. Displaying an existing session below works without signing in.';
         setup.style.display = 'none';
-      } else if (auth.role !== 'staff') {
+      } else if (auth.role !== 'staff' && auth.role !== 'admin') {
         banner.className = 'msg info';
         banner.innerHTML = `Signed in as ${esc(auth.name)} (${esc(auth.email)}) — this account can't start a session. <a href="#" id="sign-out-link" style="color:var(--accent);">Sign out</a>`;
         setup.style.display = 'none';
       } else {
         banner.className = 'msg ok';
-        banner.innerHTML = `Signed in as ${esc(auth.name)} — <a href="#" id="sign-out-link" style="color:var(--text-dim);">sign out</a>`;
+        banner.innerHTML = `Signed in as ${esc(auth.name)}${auth.role === 'admin' ? ' (admin)' : ''} — <a href="#" id="sign-out-link" style="color:var(--text-dim);">sign out</a>`;
         setup.style.display = 'block';
       }
 
