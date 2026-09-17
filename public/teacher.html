@@ -418,11 +418,38 @@
           <span>
             <span class="badge err">${esc(reasonLabel[f.reason] || f.reason)}</span>
             <span class="who">${esc(f.rollNo)}</span> — ${esc(f.detail)}${f.accuracyMeters != null ? ` (GPS ±${Math.round(f.accuracyMeters)}m)` : ''}
+            ${f.reason === 'identity_mismatch' ? `<button class="secondary release-btn" data-action="reset-identity" data-roll="${esc(f.rollNo)}" style="margin:4px 0 0; padding:4px 10px; font-size:.75rem; width:auto;">Release roll number</button>` : ''}
+            ${f.reason === 'device_mismatch' ? `<button class="secondary release-btn" data-action="reset-device" data-roll="${esc(f.rollNo)}" style="margin:4px 0 0; padding:4px 10px; font-size:.75rem; width:auto;">Reset device</button>` : ''}
           </span>
           <span class="when">${new Date(f.createdAt).toLocaleTimeString()}</span>
         </li>
       `).join('');
     }
+
+    // Delegated once (not re-bound on every 3s refresh, since the list's
+    // innerHTML is replaced each poll) — lets staff release a stuck roll
+    // number or device lock straight from the flagged-attempts list instead
+    // of needing a terminal/curl command.
+    document.getElementById('flagged-list').addEventListener('click', async (e) => {
+      const btn = e.target.closest('.release-btn');
+      if (!btn) return;
+      const { action, roll } = btn.dataset;
+      const label = action === 'reset-identity' ? 'release this roll number (clears both the identity and device lock)' : "reset this roll number's device lock";
+      if (!confirm(`Really ${label} for roll ${roll}?`)) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Working...';
+      try {
+        const res = await authFetch(`/api/students/${roll}/${action}`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error); btn.disabled = false; btn.textContent = action === 'reset-identity' ? 'Release roll number' : 'Reset device'; return; }
+        alert(`Done — roll ${roll} can now be used again.`);
+        refreshFlagged();
+      } catch (err) {
+        alert('Failed: ' + err.message);
+        btn.disabled = false;
+      }
+    });
 
     restoreSession();
   </script>
