@@ -112,10 +112,11 @@ router.post('/mark', requireAuth('student'), async (req, res) => {
 
     const normalizedRoll = rollNo.trim().toUpperCase();
 
-    // Roll numbers here are always 9 digits (e.g. 240701424). Admin is
+    // Roll numbers here are always "24070" + 4 digits (e.g. 240701424) — the
+    // prefix is fixed, only the last 4 digits vary per student. Admin is
     // exempt — it uses arbitrary test values, isolated from real students.
-    if (!isAdmin && !/^\d{9}$/.test(normalizedRoll)) {
-      return res.status(400).json({ error: 'Roll number must be 9 digits (e.g. 240701424).' });
+    if (!isAdmin && !/^24070\d{4}$/.test(normalizedRoll)) {
+      return res.status(400).json({ error: 'Wrong roll number format — must be 24070 followed by 4 digits (e.g. 240701424).' });
     }
 
     // 3. Roster check — with an enrolled list set, only those roll numbers can

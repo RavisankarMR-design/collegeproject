@@ -107,7 +107,7 @@
     document.getElementById('code-submit-btn').onclick = () => {
       const rollNo = document.getElementById('rollNo').value.trim();
       if (!rollNo) { showMsg('Enter your roll number first.', false); return; }
-      if (!validRollNo(rollNo)) { showMsg('Roll number must be 9 digits (e.g. 240701424).', false); return; }
+      if (!validRollNo(rollNo)) { showMsg('Wrong roll number format — must be 24070 followed by 4 digits (e.g. 240701424).', false); return; }
 
       const sessionCode = document.getElementById('sessionCode').value.trim();
       const code = document.getElementById('liveCode').value.trim();
@@ -120,13 +120,13 @@
 
     function validRollNo(rollNo) {
       if (auth && auth.role === 'admin') return true; // admin uses arbitrary test values
-      return /^\d{9}$/.test(rollNo);
+      return /^24070\d{4}$/.test(rollNo);
     }
 
     document.getElementById('scan-btn').onclick = () => {
       const rollNo = document.getElementById('rollNo').value.trim();
       if (!rollNo) { showMsg('Enter your roll number first.', false); return; }
-      if (!validRollNo(rollNo)) { showMsg('Roll number must be 9 digits (e.g. 240701424).', false); return; }
+      if (!validRollNo(rollNo)) { showMsg('Wrong roll number format — must be 24070 followed by 4 digits (e.g. 240701424).', false); return; }
 
       busyBtnId = 'scan-btn';
       setBusy(true, 'Opening camera...');
@@ -156,7 +156,7 @@
       if (!file) return;
       const rollNo = document.getElementById('rollNo').value.trim();
       if (!rollNo) { showMsg('Enter your roll number first.', false); e.target.value = ''; return; }
-      if (!validRollNo(rollNo)) { showMsg('Roll number must be 9 digits (e.g. 240701424).', false); e.target.value = ''; return; }
+      if (!validRollNo(rollNo)) { showMsg('Wrong roll number format — must be 24070 followed by 4 digits (e.g. 240701424).', false); e.target.value = ''; return; }
 
       busyBtnId = 'scan-btn';
       setBusy(true, 'Reading QR image...');
