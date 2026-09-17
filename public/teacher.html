@@ -129,7 +129,10 @@
         setup.style.display = 'none';
       } else {
         banner.className = 'msg ok';
-        banner.innerHTML = `Signed in as ${esc(auth.name)}${auth.role === 'admin' ? ' (admin)' : ''} — <a href="#" id="sign-out-link" style="color:var(--text-dim);">sign out</a>`;
+        const adminLinks = auth.role === 'admin'
+          ? ' · <a href="student.html" style="color:var(--accent);">Student page</a> · <a href="history.html" style="color:var(--accent);">History</a>'
+          : '';
+        banner.innerHTML = `Signed in as ${esc(auth.name)}${auth.role === 'admin' ? ' (admin)' : ''} — <a href="#" id="sign-out-link" style="color:var(--text-dim);">sign out</a>${adminLinks}`;
         setup.style.display = 'block';
       }
 
