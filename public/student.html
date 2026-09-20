@@ -121,6 +121,9 @@
       handleScan({ sessionCode, code }, rollNo);
     };
 
+    // Keep in sync with the server-side check in routes/attendance.js (search
+    // "Wrong roll number format") — this is just a fast client-side pre-check,
+    // the server enforces the real rule.
     function validRollNo(rollNo) {
       if (auth && auth.role === 'admin') return true; // admin uses arbitrary test values
       return /^24070\d{4}$/.test(rollNo);
@@ -180,7 +183,20 @@
       div.innerHTML = `<div class="msg ${ok ? 'ok' : 'err'}">${text}</div>`;
     }
 
+    // A roll number typo only gets one free silent auto-correction server-side
+    // (see routes/attendance.js) — after that it's locked and needs staff to
+    // release it. Catching the typo here, before it ever reaches the server,
+    // means an honest mistake doesn't burn that one free correction.
+    function confirmRollChange(rollNo) {
+      const lastRoll = localStorage.getItem('last_roll_no');
+      if (lastRoll && lastRoll !== rollNo) {
+        return confirm(`You last scanned in with roll number ${lastRoll}. Submit ${rollNo} instead?\n\nOnly pick "OK" if ${lastRoll} was a typo — you only get one free correction, after that a staff member has to release it.`);
+      }
+      return true;
+    }
+
     function handleScan(identity, rollNo) {
+      if (!confirmRollChange(rollNo)) { setBusy(false); return; }
       if (!navigator.geolocation) { showMsg('Geolocation not supported on this device.', false); setBusy(false); return; }
 
       setBusy(true, 'Getting GPS fix...');
@@ -203,6 +219,7 @@
           const data = await res.json();
           setBusy(false);
           if (res.ok) {
+            localStorage.setItem('last_roll_no', rollNo);
             const note = data.borderline
               ? ' — near the edge of the detection radius, flagged for teacher review.'
               : '.';

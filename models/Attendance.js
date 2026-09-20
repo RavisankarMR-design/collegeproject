@@ -5,6 +5,13 @@ const AttendanceSchema = new mongoose.Schema({
   student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
   markedAt: { type: Date, default: Date.now },
   distanceMeters: { type: Number, required: true },
+  // The student's own reported fix (not just distance from the classroom
+  // center) — needed to tell whether two students' scans were suspiciously
+  // close to EACH OTHER (see routes/attendance.js checkPassAlong), which
+  // distanceMeters alone can't show since a whole class is expected to be
+  // near the center anyway.
+  lat: { type: Number },
+  lng: { type: Number },
   // GPS accuracy radius (meters) the browser reported for this fix, so a
   // "0m from center" reading that was actually a noisy ±40m fix is visible
   // later instead of looking perfectly precise.

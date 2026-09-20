@@ -10,6 +10,7 @@
 <body>
   <h1>Attendance history</h1>
   <p class="subtitle">Past and current sessions. Tap one to see who was present and download a CSV.</p>
+  <p class="subtitle" id="admin-nav"></p>
 
   <div class="card">
     <h2>Sessions</h2>
@@ -55,7 +56,10 @@
       not_enrolled: 'Not enrolled',
       identity_mismatch: 'Identity mismatch',
       roll_number_changed: 'Roll number corrected',
+      possible_proxy_pattern: 'Possible pass-along (unconfirmed)',
+      ip_location_mismatch: 'IP/GPS mismatch (unconfirmed)',
     };
+    const infoReasons = new Set(['possible_proxy_pattern', 'ip_location_mismatch']);
 
     function esc(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
@@ -66,6 +70,10 @@
     const auth = requireSignedIn();
     if (auth && auth.role === 'student') {
       location.href = 'student.html';
+    }
+    if (auth && auth.role === 'admin') {
+      document.getElementById('admin-nav').innerHTML =
+        '<a href="teacher.html" style="color:var(--accent);">Teacher page</a> · <a href="student.html" style="color:var(--accent);">Student page</a>';
     }
 
     async function loadSessions() {
@@ -97,10 +105,13 @@
     }
 
     async function showDetail(id) {
-      const [session, records, flags] = await Promise.all([
-        fetch(`/api/sessions/${id}`).then((r) => r.json()),
-        fetch(`/api/sessions/${id}/attendance`).then((r) => r.json()),
-        fetch(`/api/sessions/${id}/flagged`).then((r) => r.json()),
+      // /:id itself is public metadata (no PII), but attendance/flagged/exports
+      // carry roll numbers and names, so those need this staff account's token
+      // (authFetch) or, for the plain download links below, the session's code.
+      const session = await fetch(`/api/sessions/${id}`).then((r) => r.json());
+      const [records, flags] = await Promise.all([
+        authFetch(`/api/sessions/${id}/attendance`).then((r) => r.json()),
+        authFetch(`/api/sessions/${id}/flagged`).then((r) => r.json()),
       ]);
 
       document.getElementById('detail').style.display = 'block';
@@ -109,8 +120,8 @@
         `🕒 ${new Date(session.endTime).toLocaleString()}`;
       document.getElementById('detail-roster').textContent =
         session.rosterSize > 0 ? `👥 ${session.rosterSize} enrolled` : '👥 open roster';
-      document.getElementById('csv-link').href = `/api/sessions/${id}/export.csv`;
-      document.getElementById('xls-link').href = `/api/sessions/${id}/export.xls`;
+      document.getElementById('csv-link').href = `/api/sessions/${id}/export.csv?code=${session.displayCode}`;
+      document.getElementById('xls-link').href = `/api/sessions/${id}/export.xls?code=${session.displayCode}`;
 
       document.getElementById('detail-count').textContent = records.length;
       document.getElementById('detail-present').innerHTML = records.length
@@ -129,7 +140,7 @@
         ? flags.map((f) => `
             <li>
               <span>
-                <span class="badge err">${esc(reasonLabel[f.reason] || f.reason)}</span>
+                <span class="badge ${infoReasons.has(f.reason) ? 'warn' : 'err'}">${esc(reasonLabel[f.reason] || f.reason)}</span>
                 <span class="who">${esc(f.rollNo)}</span> — ${esc(f.detail)}
               </span>
               <span class="when">${new Date(f.createdAt).toLocaleTimeString()}</span>

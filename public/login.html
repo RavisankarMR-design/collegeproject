@@ -6,14 +6,21 @@
 <title>Sign in</title>
 <link rel="stylesheet" href="style.css" />
 <script src="auth-client.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <h1>Sign in</h1>
-  <p class="subtitle">Use your @rajalakshmi.edu.in email. Staff go to the teacher panel automatically, everyone else to the student page.</p>
+  <p class="subtitle">Use your @rajalakshmi.edu.in account. Staff go to the teacher panel automatically, everyone else to the student page.</p>
 
   <div class="card">
-    <input type="email" id="email" placeholder="college_id" autocomplete="email" />
-    <button id="signin-btn" style="margin-top:12px;">Sign in</button>
+    <div id="google-btn"></div>
+
+    <div id="fallback" style="display:none;">
+      <p class="msg info" style="margin-bottom:12px;">Google sign-in isn't configured yet — using unverified typed-email sign-in for now.</p>
+      <input type="email" id="email" placeholder="college_id" autocomplete="email" />
+      <button id="signin-btn" style="margin-top:12px;">Sign in</button>
+    </div>
+
     <div id="signin-status" class="msg info" style="display:none; margin-top:12px;"></div>
   </div>
 
@@ -27,9 +34,8 @@
     const existing = getAuth();
     if (existing) redirectByRole(existing.role);
 
-    async function signIn() {
+    async function completeLogin(body) {
       const status = document.getElementById('signin-status');
-      const email = document.getElementById('email').value.trim();
       status.style.display = 'block';
       status.className = 'msg info';
       status.textContent = 'Signing in...';
@@ -38,7 +44,7 @@
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
+          body: JSON.stringify(body),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Sign-in failed');
@@ -53,10 +59,40 @@
       }
     }
 
-    document.getElementById('signin-btn').onclick = signIn;
-    document.getElementById('email').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') signIn();
-    });
+    // The GSI script tag is async/defer — on a slow connection it can still
+    // be loading by the time this runs, so give it a moment rather than
+    // falling back to the (unverified) typed-email form unnecessarily.
+    function waitForGoogle(timeoutMs) {
+      return new Promise((resolve) => {
+        const start = Date.now();
+        (function poll() {
+          if (window.google) return resolve(true);
+          if (Date.now() - start > timeoutMs) return resolve(false);
+          setTimeout(poll, 100);
+        })();
+      });
+    }
+
+    (async function init() {
+      const { googleClientId } = await fetch('/api/auth/config').then((r) => r.json());
+      const googleReady = googleClientId ? await waitForGoogle(3000) : false;
+
+      if (googleClientId && googleReady) {
+        google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: (response) => completeLogin({ credential: response.credential }),
+        });
+        google.accounts.id.renderButton(document.getElementById('google-btn'), { theme: 'outline', size: 'large' });
+      } else {
+        document.getElementById('fallback').style.display = 'block';
+        document.getElementById('signin-btn').onclick = () => {
+          completeLogin({ email: document.getElementById('email').value.trim() });
+        };
+        document.getElementById('email').addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') document.getElementById('signin-btn').click();
+        });
+      }
+    })();
   </script>
 </body>
 </html>

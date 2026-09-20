@@ -1,12 +1,34 @@
 const express = require('express');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const Session = require('../models/Session');
 const Attendance = require('../models/Attendance');
 const FlaggedAttempt = require('../models/FlaggedAttempt');
 const { currentWindow, generateToken, shortCode } = require('../utils/token');
-const { requireAuth } = require('../utils/auth');
+const { requireAuth, JWT_SECRET } = require('../utils/auth');
 
 const router = express.Router();
+
+// Names, roll numbers, and the live rotating QR are only meant for the
+// teacher who owns this session, or a second device (smart board/projector)
+// that already has the session's displayCode — knowing the sessionId alone
+// (a guessable-ish Mongo ObjectId) isn't enough. displayCode is handed out
+// by the same endpoints a random guesser wouldn't have hit yet, so it acts
+// as the shared secret for that "second device" flow.
+function canAccessSession(session, req) {
+  const code = req.query.code || req.body.code;
+  if (code && String(code).trim().toUpperCase() === session.displayCode) return true;
+
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return false;
+  try {
+    const user = jwt.verify(token, JWT_SECRET);
+    return user.role === 'admin' || (user.role === 'staff' && user.email === session.teacherEmail);
+  } catch {
+    return false;
+  }
+}
 
 function csvCell(value) {
   const s = value == null ? '' : String(value);
@@ -151,6 +173,10 @@ router.get('/by-code/:code', async (req, res) => {
 // Flagged (rejected, proxy-like) scan attempts for the teacher panel.
 router.get('/:id/flagged', async (req, res) => {
   try {
+    const session = await Session.findById(req.params.id).select('teacherEmail displayCode');
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!canAccessSession(session, req)) return res.status(403).json({ error: 'Not authorized for this session.' });
+
     const flags = await FlaggedAttempt.find({ session: req.params.id }).sort({ createdAt: -1 });
     res.json(flags);
   } catch (err) {
@@ -164,6 +190,7 @@ router.get('/:id/current-qr', async (req, res) => {
   try {
     const session = await Session.findById(req.params.id);
     if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!canAccessSession(session, req)) return res.status(403).json({ error: 'Not authorized for this session.' });
     if (!session.active || Date.now() > session.endTime.getTime()) {
       return res.status(410).json({ error: 'Session has ended' });
     }
@@ -184,6 +211,10 @@ router.get('/:id/current-qr', async (req, res) => {
 // Live list for the teacher dashboard.
 router.get('/:id/attendance', async (req, res) => {
   try {
+    const session = await Session.findById(req.params.id).select('teacherEmail displayCode');
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!canAccessSession(session, req)) return res.status(403).json({ error: 'Not authorized for this session.' });
+
     const records = await Attendance.find({ session: req.params.id })
       .populate('student', 'rollNo name')
       .sort({ markedAt: 1 });
@@ -225,11 +256,15 @@ function escHtml(s) {
   ));
 }
 
-// Attendance for one session as a downloadable CSV. This endpoint is
-// unauthenticated (see the read-only session-display design note elsewhere
-// in this file).
+// Attendance for one session as a downloadable CSV. Requires the session's
+// displayCode (?code=) or the owning staff/admin's bearer token — see
+// canAccessSession above.
 router.get('/:id/export.csv', async (req, res) => {
   try {
+    const session = await Session.findById(req.params.id).select('teacherEmail displayCode');
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!canAccessSession(session, req)) return res.status(403).json({ error: 'Not authorized for this session.' });
+
     const data = await loadExportRows(req.params.id);
     if (!data) return res.status(404).json({ error: 'Session not found' });
 
@@ -246,6 +281,10 @@ router.get('/:id/export.csv', async (req, res) => {
 // with the Excel MIME type/extension, no xlsx-writing library needed.
 router.get('/:id/export.xls', async (req, res) => {
   try {
+    const session = await Session.findById(req.params.id).select('teacherEmail displayCode');
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!canAccessSession(session, req)) return res.status(403).json({ error: 'Not authorized for this session.' });
+
     const data = await loadExportRows(req.params.id);
     if (!data) return res.status(404).json({ error: 'Session not found' });
 

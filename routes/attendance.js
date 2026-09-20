@@ -7,6 +7,7 @@ const FlaggedAttempt = require('../models/FlaggedAttempt');
 const { verifyToken, verifyShortCode } = require('../utils/token');
 const { distanceMeters } = require('../utils/geo');
 const { requireAuth } = require('../utils/auth');
+const { rateLimit } = require('../utils/rateLimit');
 
 async function flag(io, session, { rollNo, name, deviceId }, reason, detail, distance, accuracy) {
   try {
@@ -26,6 +27,70 @@ async function flag(io, session, { rollNo, name, deviceId }, reason, detail, dis
   }
 }
 
+// Neither of these ever blocks the scan or changes the response — they're a
+// heuristic nudge logged for the teacher to eyeball (via the existing
+// flagged-attempts list), not proof of cheating. False positives here are
+// expected and cheap; a false REJECTION would not be.
+
+// One person walking in with two already-registered phones (their own +
+// an absent friend's) passes geofence and device-binding cleanly — both
+// phones are genuinely inside the room. The one shared signal that setup
+// still leaves behind: the two scans land within a couple meters and
+// seconds of each other, session after session.
+async function checkPassAlong(io, session, record, student, lat, lng, deviceId) {
+  try {
+    const since = new Date(record.markedAt.getTime() - 90_000);
+    const nearby = await Attendance.find({
+      session: session._id,
+      _id: { $ne: record._id },
+      markedAt: { $gte: since },
+      lat: { $ne: null },
+      lng: { $ne: null },
+    }).populate('student', 'rollNo name');
+
+    for (const other of nearby) {
+      if (!other.student || other.deviceId === deviceId) continue;
+      const gap = distanceMeters(lat, lng, other.lat, other.lng);
+      if (gap <= 3) {
+        const seconds = Math.round(Math.abs(record.markedAt - other.markedAt) / 1000);
+        const detail = `Within ~${Math.round(gap)}m and ${seconds}s of roll "${other.student.rollNo}" — possibly one person carrying two phones.`;
+        await flag(io, session, { rollNo: student.rollNo, name: student.name, deviceId }, 'possible_proxy_pattern', detail, null, null);
+      }
+    }
+  } catch {
+    // best-effort heuristic only
+  }
+}
+
+function isPrivateIp(ip) {
+  const v4 = String(ip || '').replace('::ffff:', '');
+  return v4 === '::1' || /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(v4);
+}
+
+// A spoofed GPS fix (fake-GPS app, DevTools override) can claim to be
+// inside the classroom while the connection's real IP address geolocates
+// somewhere else entirely — IP geolocation is coarse (city-level, and
+// useless on carrier NAT/VPNs) so this is a loose sanity check, not proof.
+async function checkIpMismatch(io, session, record, student, deviceId, ip) {
+  try {
+    if (!ip || isPrivateIp(ip)) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,lat,lon`, { signal: controller.signal });
+    clearTimeout(timer);
+    const geo = await res.json();
+    if (geo.status !== 'success') return;
+
+    const gap = distanceMeters(geo.lat, geo.lon, session.classroom.lat, session.classroom.lng);
+    if (gap > 50_000) {
+      const detail = `Reported GPS is inside the classroom, but this connection's IP geolocates ~${Math.round(gap / 1000)}km away — possible location spoofing.`;
+      await flag(io, session, { rollNo: student.rollNo, name: student.name, deviceId }, 'ip_location_mismatch', detail, null, null);
+    }
+  } catch {
+    // best-effort network heuristic — a slow/failed lookup must never affect the response already sent
+  }
+}
+
 // A GPS fix this coarse (common indoors, where phones fall back to
 // WiFi/cell-tower positioning) can be tens of meters off in any direction —
 // not worth comparing to a room-scale geofence at all.
@@ -35,6 +100,9 @@ const MAX_ACCEPTABLE_ACCURACY_METERS = 100;
 
 const router = express.Router();
 
+// Bounds short-code brute-forcing (4-digit space) and general abuse of the mark endpoint.
+const markLimiter = rateLimit({ windowMs: 60_000, max: 20 });
+
 // Student submits either the raw QR payload they scanned, OR — when the QR
 // can't be displayed (broken projector, etc) — the session's short display
 // code plus the 4-digit rotating code read off the teacher's screen. Either
@@ -42,7 +110,7 @@ const router = express.Router();
 // client-side (see public/student.html) and stored persistently on that
 // device. Identity (email + name) comes only from the verified Google
 // sign-in, never from the request body.
-router.post('/mark', requireAuth('student'), async (req, res) => {
+router.post('/mark', markLimiter, requireAuth('student'), async (req, res) => {
   try {
     const io = req.app.get('io');
     const { email, name, role } = req.user;
@@ -115,13 +183,17 @@ router.post('/mark', requireAuth('student'), async (req, res) => {
     // Roll numbers here are always "24070" + 4 digits (e.g. 240701424) — the
     // prefix is fixed, only the last 4 digits vary per student. Admin is
     // exempt — it uses arbitrary test values, isolated from real students.
+    // Keep in sync with public/student.html's validRollNo — that's just a
+    // client-side pre-check, this is the rule that's actually enforced.
     if (!isAdmin && !/^24070\d{4}$/.test(normalizedRoll)) {
       return res.status(400).json({ error: 'Wrong roll number format — must be 24070 followed by 4 digits (e.g. 240701424).' });
     }
 
     // 3. Roster check — with an enrolled list set, only those roll numbers can
     //    ever be marked present, so a 30-student class can't end up with 31 records.
-    if (session.roster.length > 0 && !session.roster.includes(normalizedRoll)) {
+    //    Admin is exempt, same as the format check above — it's a test/demo
+    //    account, never a real enrolled roll number.
+    if (!isAdmin && session.roster.length > 0 && !session.roster.includes(normalizedRoll)) {
       await flag(io, session, { rollNo, name, deviceId }, 'not_enrolled', `Roll number "${rollNo}" is not on this session's roster`, distance, accuracy);
       return res.status(403).json({ error: 'This roll number is not enrolled in this class session.' });
     }
@@ -133,11 +205,12 @@ router.post('/mark', requireAuth('student'), async (req, res) => {
     // (admin needs to run arbitrary roll numbers through the flow).
     let student;
     if (isAdmin) {
-      // A fixed, namespaced roll number — never whatever the admin typed —
-      // so a test scan can never occupy (or collide with) a real student's
-      // roll number in the shared Student collection.
+      // A fixed, namespaced roll number derived from the admin's own email —
+      // never whatever they typed — so a test scan can never occupy (or
+      // collide with) a real student's roll number, and two different admin
+      // accounts can't collide with each other now that rollNo is unique.
       student = await Student.findOne({ email });
-      if (!student) student = await Student.create({ email, rollNo: 'ADMIN-TEST', name });
+      if (!student) student = await Student.create({ email, rollNo: `ADMIN-${email.split('@')[0].toUpperCase()}`, name });
     } else {
       // Identity consistency — still blocks two different accounts from
       // claiming the same roll number. But a signed-in account correcting
@@ -155,9 +228,25 @@ router.post('/mark', requireAuth('student'), async (req, res) => {
         return res.status(403).json({ error: 'This roll number is already registered to a different account.' });
       }
       if (studentByEmail && studentByEmail.rollNo !== normalizedRoll) {
+        // A student gets exactly one self-service correction (a mistyped
+        // roll the first time). Locking it after that closes the gap where
+        // an account could keep hopping onto other unclaimed roll numbers —
+        // any change past the first needs staff to reset-identity.
+        if (studentByEmail.rollLocked) {
+          return res.status(403).json({ error: 'Your roll number is locked to your account. Ask a staff member to release it if it needs to change again.' });
+        }
         const oldRoll = studentByEmail.rollNo;
         studentByEmail.rollNo = normalizedRoll;
-        await studentByEmail.save();
+        studentByEmail.rollLocked = true;
+        try {
+          await studentByEmail.save();
+        } catch (err) {
+          if (err.code === 11000) {
+            await flag(io, session, { rollNo, name, deviceId }, 'identity_mismatch', `Roll number "${normalizedRoll}" is already registered to a different account`, distance, accuracy);
+            return res.status(403).json({ error: 'This roll number is already registered to a different account.' });
+          }
+          throw err;
+        }
         await flag(io, session, { rollNo, name, deviceId }, 'roll_number_changed', `Account switched from roll "${oldRoll}" to "${normalizedRoll}"`, distance, accuracy);
       }
 
@@ -180,8 +269,9 @@ router.post('/mark', requireAuth('student'), async (req, res) => {
         }
       } catch (err) {
         if (err.code === 11000) {
-          await flag(io, session, { rollNo, name, deviceId }, 'device_mismatch', 'This device is already registered to a different account', distance, accuracy);
-          return res.status(403).json({ error: 'This device is already registered to a different account.' });
+          const dupField = err.keyPattern && err.keyPattern.rollNo ? 'roll number' : 'device';
+          await flag(io, session, { rollNo, name, deviceId }, 'device_mismatch', `This ${dupField} is already registered to a different account`, distance, accuracy);
+          return res.status(403).json({ error: `This ${dupField} is already registered to a different account.` });
         }
         throw err;
       }
@@ -197,6 +287,8 @@ router.post('/mark', requireAuth('student'), async (req, res) => {
         accuracyMeters: accuracy,
         borderline,
         deviceId,
+        lat,
+        lng,
       });
       io.to(String(session._id)).emit('present', {
         student: { rollNo: student.rollNo, name: student.name },
@@ -205,6 +297,13 @@ router.post('/mark', requireAuth('student'), async (req, res) => {
         borderline,
         markedAt: record.markedAt,
       });
+
+      // Fire-and-forget — heuristics, must never delay or affect this response.
+      if (!isAdmin) {
+        checkPassAlong(io, session, record, student, lat, lng, deviceId);
+        checkIpMismatch(io, session, record, student, deviceId, req.ip);
+      }
+
       return res.status(201).json({
         ok: true,
         distanceMeters: Math.round(distance),

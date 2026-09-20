@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 
 const ALLOWED_DOMAIN = 'rajalakshmi.edu.in';
 
@@ -18,11 +19,13 @@ const SESSION_LIFETIME = '12h'; // a school day, with buffer
 
 const EMAIL_RE = /^[a-z0-9._+-]+@rajalakshmi\.edu\.in$/;
 
-// ponytail: self-declared email, not Google-verified — anyone can type any
-// @rajalakshmi.edu.in address. Trial skips OAuth for speed; swap in
-// verifyGoogleToken (git history) if real identity verification is needed.
-function verifyEmail(rawEmail) {
-  const email = String(rawEmail || '').toLowerCase().trim();
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || null;
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+
+// Shared by both login paths below — decides role from an email that's
+// already been established as real (Google-verified, or in dev mode the
+// self-typed fallback). Never call this with an unverified email.
+function identityFor(email) {
   if (ADMIN_EMAILS.includes(email)) {
     return { email, name: 'Admin', role: 'admin' };
   }
@@ -36,6 +39,26 @@ function verifyEmail(rawEmail) {
   const firstSegment = email.split('@')[0].split('.')[0];
   const name = firstSegment.charAt(0).toUpperCase() + firstSegment.slice(1);
   return { email, name, role };
+}
+
+// Real identity check — verifies the ID token's signature, audience, issuer
+// and expiry against Google's own keys, so the email in it can't be typed
+// or forged (see routes/auth.js). Only live when GOOGLE_CLIENT_ID is set.
+async function verifyGoogleIdToken(idToken) {
+  const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
+  const payload = ticket.getPayload();
+  if (!payload.email_verified) {
+    throw new Error('Google account email is not verified.');
+  }
+  return identityFor(String(payload.email).toLowerCase().trim());
+}
+
+// ponytail: self-declared email, not Google-verified — anyone can type any
+// @rajalakshmi.edu.in address. Only reachable when GOOGLE_CLIENT_ID isn't
+// configured, and never in production (see server.js) — a dev-only stand-in
+// until real Google sign-in is set up.
+function verifyEmail(rawEmail) {
+  return identityFor(String(rawEmail || '').toLowerCase().trim());
 }
 
 function issueSessionToken({ email, name, role }) {
@@ -63,4 +86,4 @@ function requireAuth(role) {
   };
 }
 
-module.exports = { verifyEmail, issueSessionToken, requireAuth, JWT_SECRET };
+module.exports = { verifyEmail, verifyGoogleIdToken, issueSessionToken, requireAuth, JWT_SECRET, GOOGLE_CLIENT_ID };

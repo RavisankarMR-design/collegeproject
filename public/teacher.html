@@ -107,7 +107,7 @@
   </div>
 
   <script>
-    let lat = null, lng = null, sessionId = null, windowSeconds = 10, rosterSize = 0, sessionEndTime = null;
+    let lat = null, lng = null, sessionId = null, displayCode = null, windowSeconds = 10, rosterSize = 0, sessionEndTime = null;
 
     // The setup form (start a new session) needs a staff account; the join
     // card below it (display an existing session on a second screen, e.g. a
@@ -179,7 +179,13 @@
       not_enrolled: 'Not enrolled',
       identity_mismatch: 'Identity mismatch',
       roll_number_changed: 'Roll number corrected',
+      possible_proxy_pattern: 'Possible pass-along (unconfirmed)',
+      ip_location_mismatch: 'IP/GPS mismatch (unconfirmed)',
     };
+    // These two are heuristic nudges, not rejections — the scan was still
+    // accepted. Styled as a soft warning instead of the red "rejected" badge
+    // so they don't read as proven cheating.
+    const infoReasons = new Set(['possible_proxy_pattern', 'ip_location_mismatch']);
 
     // Roll numbers and names are student-supplied and rendered via innerHTML,
     // so they have to be escaped or a crafted name runs script in this panel.
@@ -251,6 +257,7 @@
     // orphaning it (the id used to live only in this variable).
     function enterLiveMode(data) {
       sessionId = data.sessionId;
+      displayCode = data.displayCode;
       windowSeconds = data.windowSeconds;
       rosterSize = data.rosterSize;
       sessionEndTime = new Date(data.endTime);
@@ -372,7 +379,7 @@
     };
 
     async function refreshQR() {
-      const res = await fetch(`/api/sessions/${sessionId}/current-qr`);
+      const res = await fetch(`/api/sessions/${sessionId}/current-qr?code=${displayCode}`);
       const data = await res.json();
       if (!res.ok) { document.getElementById('timer').textContent = '—'; return; }
 
@@ -388,7 +395,7 @@
     }
 
     async function refreshList() {
-      const res = await fetch(`/api/sessions/${sessionId}/attendance`);
+      const res = await fetch(`/api/sessions/${sessionId}/attendance?code=${displayCode}`);
       const records = await res.json();
       document.getElementById('count').textContent = records.length;
       const ul = document.getElementById('present-list');
@@ -408,7 +415,7 @@
     }
 
     async function refreshFlagged() {
-      const res = await fetch(`/api/sessions/${sessionId}/flagged`);
+      const res = await fetch(`/api/sessions/${sessionId}/flagged?code=${displayCode}`);
       const flags = await res.json();
       document.getElementById('flagged-count').textContent = flags.length;
       const ul = document.getElementById('flagged-list');
@@ -419,7 +426,7 @@
       ul.innerHTML = flags.map((f) => `
         <li>
           <span>
-            <span class="badge err">${esc(reasonLabel[f.reason] || f.reason)}</span>
+            <span class="badge ${infoReasons.has(f.reason) ? 'warn' : 'err'}">${esc(reasonLabel[f.reason] || f.reason)}</span>
             <span class="who">${esc(f.rollNo)}</span> — ${esc(f.detail)}${f.accuracyMeters != null ? ` (GPS ±${Math.round(f.accuracyMeters)}m)` : ''}
             ${f.reason === 'identity_mismatch' ? `<button class="secondary release-btn" data-action="reset-identity" data-roll="${esc(f.rollNo)}" style="margin:4px 0 0; padding:4px 10px; font-size:.75rem; width:auto;">Release roll number</button>` : ''}
             ${f.reason === 'device_mismatch' ? `<button class="secondary release-btn" data-action="reset-device" data-roll="${esc(f.rollNo)}" style="margin:4px 0 0; padding:4px 10px; font-size:.75rem; width:auto;">Reset device</button>` : ''}
@@ -443,7 +450,11 @@
       btn.disabled = true;
       btn.textContent = 'Working...';
       try {
-        const res = await authFetch(`/api/students/${roll}/${action}`, { method: 'POST' });
+        const res = await authFetch(`/api/students/${roll}/${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        });
         const data = await res.json();
         if (!res.ok) { alert(data.error); btn.disabled = false; btn.textContent = action === 'reset-identity' ? 'Release roll number' : 'Reset device'; return; }
         alert(`Done — roll ${roll} can now be used again.`);

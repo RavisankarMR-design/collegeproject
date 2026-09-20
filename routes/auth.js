@@ -1,17 +1,31 @@
 const express = require('express');
-const { verifyEmail, issueSessionToken } = require('../utils/auth');
+const { verifyEmail, verifyGoogleIdToken, issueSessionToken, GOOGLE_CLIENT_ID } = require('../utils/auth');
+const { rateLimit } = require('../utils/rateLimit');
 
 const router = express.Router();
 
-// Body: { email } — self-declared, checked only for the @rajalakshmi.edu.in
-// domain and staff-list membership (see utils/auth.js verifyEmail).
-router.post('/login', (req, res) => {
+const loginLimiter = rateLimit({ windowMs: 60_000, max: 10 });
+
+// Public — no secret in it, just tells login.html whether Google sign-in is
+// configured yet, and which client id to initialize it with.
+router.get('/config', (req, res) => {
+  res.json({ googleClientId: GOOGLE_CLIENT_ID });
+});
+
+// Body: { credential } — a Google ID token from Sign In With Google,
+// verified against Google's own keys (see utils/auth.js verifyGoogleIdToken)
+// so the email in it can't be typed or forged. Falls back to { email }
+// (self-declared, unverified) only when GOOGLE_CLIENT_ID isn't configured —
+// dev-only; production refuses to boot without it (see server.js).
+router.post('/login', loginLimiter, async (req, res) => {
   try {
-    const identity = verifyEmail(req.body.email);
+    const identity = GOOGLE_CLIENT_ID
+      ? await verifyGoogleIdToken(req.body.credential)
+      : verifyEmail(req.body.email);
     const token = issueSessionToken(identity);
     res.json({ token, ...identity });
   } catch (err) {
-    res.status(401).json({ error: err.message });
+    res.status(401).json({ error: GOOGLE_CLIENT_ID ? 'Google sign-in failed — please try again.' : err.message });
   }
 });
 
