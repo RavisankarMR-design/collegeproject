@@ -78,7 +78,10 @@
         </div>
       </div>
       <p class="subtitle" style="text-align:center; margin-top:10px;">
-        Can't show the QR? Have students enter session code <strong id="session-code-fallback"></strong> and live code <strong id="live-code-fallback" style="letter-spacing:.1em;"></strong> instead.
+        <a href="#" id="code-fallback-toggle" style="color:var(--accent);">Can't show the QR? Enter the code instead</a>
+      </p>
+      <p class="subtitle" id="code-fallback" style="display:none; text-align:center; margin-top:4px;">
+        Have students enter session code <strong id="session-code-fallback"></strong> and live code <strong id="live-code-fallback" style="letter-spacing:.1em;"></strong> instead.
       </p>
     </div>
 
@@ -332,6 +335,14 @@
       if (!savedId) return;
       if (!(await loadSessionById(savedId))) localStorage.removeItem('active_session');
     }
+
+    document.getElementById('code-fallback-toggle').onclick = (e) => {
+      e.preventDefault();
+      const entry = document.getElementById('code-fallback');
+      const isHidden = entry.style.display === 'none';
+      entry.style.display = isHidden ? 'block' : 'none';
+      e.target.textContent = isHidden ? 'Hide code' : "Can't show the QR? Enter the code instead";
+    };
 
     document.getElementById('copy-link-btn').onclick = async () => {
       const btn = document.getElementById('copy-link-btn');
