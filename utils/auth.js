@@ -19,6 +19,12 @@ const SESSION_LIFETIME = '12h'; // a school day, with buffer
 
 const EMAIL_RE = /^[a-z0-9._+-]+@rajalakshmi\.edu\.in$/;
 
+// Marks an error as safe to show the user verbatim (they already know their
+// own email — telling them "wrong domain" leaks nothing). Anything NOT this
+// type (a real Google token-verification failure) stays generic in
+// routes/auth.js, since those messages could hint at attack internals.
+class SignInError extends Error {}
+
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || null;
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
@@ -30,7 +36,7 @@ function identityFor(email) {
     return { email, name: 'Admin', role: 'admin' };
   }
   if (!EMAIL_RE.test(email)) {
-    throw new Error(`Enter a valid @${ALLOWED_DOMAIN} email address.`);
+    throw new SignInError(`Please sign in with your @${ALLOWED_DOMAIN} college account, not a personal email.`);
   }
 
   const role = STAFF_EMAILS.includes(email) ? 'staff' : 'student';
@@ -48,7 +54,7 @@ async function verifyGoogleIdToken(idToken) {
   const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
   const payload = ticket.getPayload();
   if (!payload.email_verified) {
-    throw new Error('Google account email is not verified.');
+    throw new SignInError('Your Google account email is not verified — verify it with Google first, then try again.');
   }
   return identityFor(String(payload.email).toLowerCase().trim());
 }
@@ -86,4 +92,4 @@ function requireAuth(role) {
   };
 }
 
-module.exports = { verifyEmail, verifyGoogleIdToken, issueSessionToken, requireAuth, JWT_SECRET, GOOGLE_CLIENT_ID };
+module.exports = { verifyEmail, verifyGoogleIdToken, issueSessionToken, requireAuth, JWT_SECRET, GOOGLE_CLIENT_ID, SignInError };
