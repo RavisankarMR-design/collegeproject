@@ -82,7 +82,9 @@
           client_id: googleClientId,
           callback: (response) => completeLogin({ credential: response.credential }),
         });
-        google.accounts.id.renderButton(document.getElementById('google-btn'), { theme: 'outline', size: 'large' });
+        const btnContainer = document.getElementById('google-btn');
+        btnContainer.innerHTML = ''; // GSI can leave a stale/duplicate prompt behind depending on navigation history — always render into a clean container
+        google.accounts.id.renderButton(btnContainer, { theme: 'outline', size: 'large' });
       } else {
         document.getElementById('fallback').style.display = 'block';
         document.getElementById('signin-btn').onclick = () => {
