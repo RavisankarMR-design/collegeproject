@@ -25,6 +25,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     const token = issueSessionToken(identity);
     res.json({ token, ...identity });
   } catch (err) {
+    if (GOOGLE_CLIENT_ID) console.error('Google sign-in verification failed:', err);
     res.status(401).json({ error: GOOGLE_CLIENT_ID ? 'Google sign-in failed — please try again.' : err.message });
   }
 });
