@@ -81,7 +81,7 @@
         <a href="#" id="code-fallback-toggle" style="color:var(--accent);">Can't show the QR? Enter the code instead</a>
       </p>
       <p class="subtitle" id="code-fallback" style="display:none; text-align:center; margin-top:4px;">
-        Have students enter this code instead: <strong id="combined-code-fallback" style="letter-spacing:.1em;"></strong>
+        Have students enter this live code instead: <strong id="live-code-fallback" style="letter-spacing:.1em;"></strong>
       </p>
     </div>
 
@@ -327,13 +327,33 @@
       if (e.key === 'Enter') document.getElementById('join-code-btn').click();
     });
 
+    // A second device (smart board) signed in as the same staff account that
+    // started the session shouldn't need a code or link at all — it can just
+    // ask for that staff's own sessions (already scoped server-side to
+    // req.user.email) and pick up whichever one is still live.
+    async function loadOwnActiveSession() {
+      const auth = getAuth();
+      if (!auth || (auth.role !== 'staff' && auth.role !== 'admin')) return false;
+      try {
+        const res = await authFetch('/api/sessions');
+        if (!res.ok) return false;
+        const sessions = await res.json();
+        const live = sessions.find((s) => s.active && new Date(s.endTime) > new Date());
+        return live ? loadSessionById(live.sessionId) : false;
+      } catch {
+        return false;
+      }
+    }
+
     async function restoreSession() {
       const urlSessionId = new URLSearchParams(location.search).get('session');
       if (urlSessionId && (await loadSessionById(urlSessionId))) return;
 
       const savedId = localStorage.getItem('active_session');
-      if (!savedId) return;
-      if (!(await loadSessionById(savedId))) localStorage.removeItem('active_session');
+      if (savedId && (await loadSessionById(savedId))) return;
+      if (savedId) localStorage.removeItem('active_session');
+
+      await loadOwnActiveSession();
     }
 
     document.getElementById('code-fallback-toggle').onclick = (e) => {
@@ -396,7 +416,7 @@
 
       const canvas = document.getElementById('qr-canvas');
       QRCode.toCanvas(canvas, data.payload, { width: 220 });
-      document.getElementById('combined-code-fallback').textContent = `${data.displayCode || ''} ${data.shortCode || ''}`;
+      document.getElementById('live-code-fallback').textContent = data.shortCode || '';
 
       const secondsLeft = Math.ceil(data.msLeftInWindow / 1000);
       document.getElementById('timer').textContent = secondsLeft + 's';

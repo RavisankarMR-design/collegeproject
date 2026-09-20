@@ -9,6 +9,19 @@ const { distanceMeters } = require('../utils/geo');
 const { requireAuth } = require('../utils/auth');
 const { rateLimit } = require('../utils/rateLimit');
 
+// Students only ever see/type the 4-digit rotating code, never a session
+// identifier — so a code alone has to be matched against every currently
+// active session's current (and previous) window. Cheap: only sessions
+// with active:true and a future endTime are candidates, which in practice
+// is a handful of concurrently running classes, not the whole collection.
+async function findSessionByShortCode(code) {
+  const candidates = await Session.find({ active: true, endTime: { $gt: new Date() } });
+  for (const session of candidates) {
+    if (verifyShortCode(session.secret, session._id, code, session.windowSeconds).valid) return session;
+  }
+  return null;
+}
+
 async function flag(io, session, { rollNo, name, deviceId }, reason, detail, distance, accuracy) {
   try {
     const attempt = await FlaggedAttempt.create({
@@ -105,8 +118,9 @@ const markLimiter = rateLimit({ windowMs: 60_000, max: 20 });
 
 // Student submits either the raw QR payload they scanned, OR — when the QR
 // can't be displayed (broken projector, etc) — the session's short display
-// code plus the 4-digit rotating code read off the teacher's screen. Either
-// way: their roll number, current GPS coords, and a per-device id generated
+// live 4-digit code read off the teacher's screen — just the code, nothing
+// session-identifying (see findSessionByShortCode below). Either way: their
+// roll number, current GPS coords, and a per-device id generated
 // client-side (see public/student.html) and stored persistently on that
 // device. Identity (email + name) comes only from the verified Google
 // sign-in, never from the request body.
@@ -115,10 +129,10 @@ router.post('/mark', markLimiter, requireAuth('student'), async (req, res) => {
     const io = req.app.get('io');
     const { email, name, role } = req.user;
     const isAdmin = role === 'admin';
-    const { payload, sessionCode, code, rollNo, lat, lng, accuracy, deviceId } = req.body;
+    const { payload, code, rollNo, lat, lng, accuracy, deviceId } = req.body;
 
-    if ((!payload && !(sessionCode && code)) || !rollNo || lat == null || lng == null || !deviceId) {
-      return res.status(400).json({ error: 'A QR scan (or session code + live code), rollNo, lat, lng, deviceId are all required' });
+    if ((!payload && !code) || !rollNo || lat == null || lng == null || !deviceId) {
+      return res.status(400).json({ error: 'A QR scan (or live code), rollNo, lat, lng, deviceId are all required' });
     }
 
     if (accuracy != null && accuracy > MAX_ACCEPTABLE_ACCURACY_METERS) {
@@ -146,16 +160,14 @@ router.post('/mark', markLimiter, requireAuth('student'), async (req, res) => {
       const tokenCheck = verifyToken(session.secret, sessionId, windowIndex, token, session.windowSeconds);
       if (!tokenCheck.valid) return res.status(400).json({ error: tokenCheck.reason });
     } else {
-      session = await Session.findOne({ displayCode: String(sessionCode).trim().toUpperCase() });
-      if (!session) return res.status(404).json({ error: 'Session not found' });
-      if (!session.active || Date.now() > session.endTime.getTime()) {
-        return res.status(410).json({ error: 'This session has ended' });
-      }
-
       // 1. Rotating-code check — same guarantee as the QR's rotating token,
-      // just typed instead of scanned.
-      const codeCheck = verifyShortCode(session.secret, session._id, code, session.windowSeconds);
-      if (!codeCheck.valid) return res.status(400).json({ error: codeCheck.reason });
+      // just typed instead of scanned. The 4-digit code alone doesn't name a
+      // session, so it's checked against every currently active session's
+      // current (and previous) window — cheap at the scale of concurrently
+      // running classes, and means the student never has to know or type
+      // which session they're in, just the code shown on their teacher's screen.
+      session = await findSessionByShortCode(code);
+      if (!session) return res.status(404).json({ error: 'Code expired or incorrect — check the live code and try again' });
     }
 
     // 2. Geofence check — blocks scanning the (still-valid) QR from outside class,
