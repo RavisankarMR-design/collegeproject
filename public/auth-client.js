@@ -1,6 +1,6 @@
-// Shared by teacher.html and student.html (and read by login.html) — one
-// place for "am I signed in," "attach the token," and "handle an expired
-// session," instead of copies drifting apart across pages.
+// Shared by teacher.html, student.html and index.html (the sign-in page) —
+// one place for "am I signed in," "attach the token," and "handle an
+// expired session," instead of copies drifting apart across pages.
 const AUTH_KEY = 'auth';
 
 function getAuth() {
@@ -19,22 +19,22 @@ function getAuth() {
 
 function signOut() {
   localStorage.removeItem(AUTH_KEY);
-  location.href = 'login.html';
+  location.href = 'index.html';
 }
 
-// Redirects to login.html if nobody's signed in; returns the auth object
-// otherwise. Call at the top of a page that requires sign-in.
+// Redirects to index.html (the sign-in page) if nobody's signed in; returns
+// the auth object otherwise. Call at the top of a page that requires sign-in.
 function requireSignedIn() {
   const auth = getAuth();
   if (!auth) {
-    location.href = 'login.html';
+    location.href = 'index.html';
     return null;
   }
   return auth;
 }
 
 // fetch() wrapper that attaches the bearer token and sends the caller back
-// to login.html on a 401 (expired/invalid session) instead of failing silently.
+// to index.html on a 401 (expired/invalid session) instead of failing silently.
 async function authFetch(url, options = {}) {
   const auth = getAuth();
   const headers = { ...(options.headers || {}) };
@@ -43,7 +43,7 @@ async function authFetch(url, options = {}) {
   const res = await fetch(url, { ...options, headers });
   if (res.status === 401) {
     localStorage.removeItem(AUTH_KEY);
-    location.href = 'login.html';
+    location.href = 'index.html';
   }
   return res;
 }

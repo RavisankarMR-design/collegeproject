@@ -124,7 +124,7 @@
 
       if (!auth) {
         banner.className = 'msg info';
-        banner.innerHTML = 'Not signed in — <a href="login.html" style="color:var(--accent);">sign in with your staff account</a> to start a session. Displaying an existing session below works without signing in.';
+        banner.innerHTML = 'Not signed in — <a href="index.html" style="color:var(--accent);">sign in with your staff account</a> to start a session. Displaying an existing session below works without signing in.';
         setup.style.display = 'none';
       } else if (auth.role !== 'staff' && auth.role !== 'admin') {
         banner.className = 'msg info';
