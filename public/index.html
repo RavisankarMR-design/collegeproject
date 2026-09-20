@@ -76,12 +76,20 @@
       const googleReady = googleClientId ? await waitForGoogle(3000) : false;
 
       if (googleClientId && googleReady) {
+        // cancel() clears any One Tap prompt state GSI may have carried over
+        // from elsewhere in this browser session — without it, arriving here
+        // via a client-side redirect (e.g. an expired-session bounce from
+        // student.html) can show both our button AND a leftover GSI auto
+        // prompt stacked on top of each other.
+        if (google.accounts.id.cancel) google.accounts.id.cancel();
         google.accounts.id.initialize({
           client_id: googleClientId,
           callback: (response) => completeLogin({ credential: response.credential }),
+          auto_select: false,
+          cancel_on_tap_outside: true,
         });
         const btnContainer = document.getElementById('google-btn');
-        btnContainer.innerHTML = ''; // GSI can leave a stale/duplicate prompt behind depending on navigation history — always render into a clean container
+        btnContainer.innerHTML = '';
         google.accounts.id.renderButton(btnContainer, { theme: 'outline', size: 'large' });
       } else {
         document.getElementById('fallback').style.display = 'block';
