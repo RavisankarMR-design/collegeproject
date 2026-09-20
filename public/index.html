@@ -13,7 +13,12 @@
   <p class="subtitle">Rotating QR + GPS geofence + device binding + roster enforcement + verified sign-in.</p>
 
   <div class="card">
-    <div id="google-btn"></div>
+    <!-- Google's button is a cross-origin iframe we can't reach inside — under
+         some navigation paths (e.g. a session-expired redirect) it renders an
+         extra personalized row stacked below the normal one. Clipping the
+         container to exactly one button's height hides that regardless of
+         what Google decides to render, without touching iframe internals. -->
+    <div id="google-btn" style="height:40px; overflow:hidden;"></div>
 
     <div id="fallback" style="display:none;">
       <p class="msg info" style="margin-bottom:12px;">Google sign-in isn't configured yet — using unverified typed-email sign-in for now.</p>
