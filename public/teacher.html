@@ -81,7 +81,7 @@
         <a href="#" id="code-fallback-toggle" style="color:var(--accent);">Can't show the QR? Enter the code instead</a>
       </p>
       <p class="subtitle" id="code-fallback" style="display:none; text-align:center; margin-top:4px;">
-        Have students enter session code <strong id="session-code-fallback"></strong> and live code <strong id="live-code-fallback" style="letter-spacing:.1em;"></strong> instead.
+        Have students enter this code instead: <strong id="combined-code-fallback" style="letter-spacing:.1em;"></strong>
       </p>
     </div>
 
@@ -396,8 +396,7 @@
 
       const canvas = document.getElementById('qr-canvas');
       QRCode.toCanvas(canvas, data.payload, { width: 220 });
-      document.getElementById('session-code-fallback').textContent = data.displayCode || '';
-      document.getElementById('live-code-fallback').textContent = data.shortCode || '';
+      document.getElementById('combined-code-fallback').textContent = `${data.displayCode || ''} ${data.shortCode || ''}`;
 
       const secondsLeft = Math.ceil(data.msLeftInWindow / 1000);
       document.getElementById('timer').textContent = secondsLeft + 's';

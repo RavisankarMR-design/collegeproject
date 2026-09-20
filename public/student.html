@@ -33,10 +33,8 @@
     </p>
 
     <div id="code-entry" style="display:none; margin-top:10px;">
-      <label for="sessionCode">Session code (from the teacher's screen)</label>
-      <input id="sessionCode" placeholder="e.g. K7Q3RT" style="text-transform:uppercase; letter-spacing:2px;" maxlength="6" autocomplete="off" />
-      <label for="liveCode" style="margin-top:10px;">Live code (changes every 10s)</label>
-      <input id="liveCode" placeholder="e.g. 4821" maxlength="4" inputmode="numeric" autocomplete="off" />
+      <label for="fallbackCode">Code from the teacher's screen (changes every 10s)</label>
+      <input id="fallbackCode" placeholder="e.g. K7Q3RT 4821" style="text-transform:uppercase; letter-spacing:1px;" autocomplete="off" />
       <button id="code-submit-btn" style="margin-top:10px;">Submit code</button>
     </div>
 
@@ -112,9 +110,13 @@
       if (!rollNo) { showMsg('Enter your roll number first.', false); return; }
       if (!validRollNo(rollNo)) { showMsg('Wrong roll number format — must be 24070 followed by 4 digits (e.g. 240701424).', false); return; }
 
-      const sessionCode = document.getElementById('sessionCode').value.trim();
-      const code = document.getElementById('liveCode').value.trim();
-      if (!sessionCode || !code) { showMsg('Enter both the session code and the live code.', false); return; }
+      // Teacher's screen shows "K7Q3RT 4821" as one string — split on
+      // whitespace so students paste/type it as a single code, while the
+      // server still needs both parts separately (see routes/attendance.js).
+      const parts = document.getElementById('fallbackCode').value.trim().toUpperCase().split(/\s+/);
+      const sessionCode = parts[0] || '';
+      const code = parts[1] || '';
+      if (!sessionCode || !code) { showMsg('Enter the full code shown on the teacher\'s screen (both parts).', false); return; }
 
       busyBtnId = 'code-submit-btn';
       document.getElementById('result').innerHTML = '';
