@@ -8,7 +8,6 @@ const { requireAuth } = require('../utils/auth');
 const { canAccessSession, bearer, ownsSession } = require('../utils/access');
 const { rateLimit } = require('../utils/rateLimit');
 const { serverError, isNum } = require('../utils/http');
-const { createFailureTracker } = require('../utils/failureTracker');
 
 const router = express.Router();
 
@@ -17,7 +16,7 @@ const creds = (req) => ({ code: req.query.code, token: bearer(req) });
 
 // Looking a session up by its 6-char code is the one unauthenticated way in, so
 // it is throttled against enumeration (32^6 combinations, but still).
-const byCodeLimiter = rateLimit({ windowMs: 60_000, max: 30 });
+const byCodeLimiter = rateLimit({ windowMs: 60_000, max: 60 });
 
 // A spreadsheet treats a cell starting with = + - @ as a formula. Names/roll
 // numbers are student-influenced, so neutralise them in exports.
@@ -142,11 +141,9 @@ router.post('/', requireAuth('staff'), async (req, res) => {
 // displayCode to anyone and undo the gating on every endpoint below.
 router.get('/:id', async (req, res) => {
   try {
-    if (codeGuesses.lockedFor(req.ip)) return res.status(429).json({ error: 'Too many failed attempts — try again later.' });
     const session = await Session.findById(req.params.id);
     if (!session) return res.status(404).json({ error: 'Session not found' });
     if (canAccessSession(session, creds(req))) return res.json(fullSummary(session));
-    if (req.query.code) codeGuesses.record(req.ip); // a wrong code here is a guess, same as on the gated endpoints
     res.json({ sessionId: session._id, subject: session.subject, active: session.active, endTime: session.endTime });
   } catch (err) {
     serverError(res, err);
@@ -167,16 +164,14 @@ router.get('/by-code/:code', byCodeLimiter, async (req, res) => {
   }
 });
 
-// Wrong displayCode guesses against the gated endpoints, per IP. A real board
-// never gets a 403 (it holds the code), so 30 in a minute is someone guessing.
-const codeGuesses = createFailureTracker({ maxFailures: 30, windowMs: 60_000, lockMs: 5 * 60_000 });
-
+// No lockout on wrong displayCode guesses, on purpose: 32^6 (~1 billion) codes make
+// guessing pointless, whereas any per-IP lockout would let one student (or a whole
+// campus sharing an IP) lock the teacher's own board out mid-class.
 // Loads a session and enforces canAccessSession in one place for the gated GETs.
 async function gatedSession(req, res, fields = 'teacherEmail displayCode') {
-  if (codeGuesses.lockedFor(req.ip)) { res.status(429).json({ error: 'Too many failed attempts — try again later.' }); return null; }
   const session = await Session.findById(req.params.id).select(fields);
   if (!session) { res.status(404).json({ error: 'Session not found' }); return null; }
-  if (!canAccessSession(session, creds(req))) { codeGuesses.record(req.ip); res.status(403).json({ error: 'Not authorized for this session.' }); return null; }
+  if (!canAccessSession(session, creds(req))) { res.status(403).json({ error: 'Not authorized for this session.' }); return null; }
   return session;
 }
 

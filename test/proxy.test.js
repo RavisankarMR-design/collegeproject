@@ -599,26 +599,25 @@ t('leak: attendance / flagged API and socket pushes never carry the deviceId cre
   assert.ok(spy.events.some((e) => e[0] === 'flagged'), 'expected a flagged push');
   assert.ok(!JSON.stringify(spy.events).includes('deviceId') && !JSON.stringify(spy.events).includes(b.device), 'socket push exposes deviceId');
 });
-t('guess: hammering wrong display codes locks the guesser out (per IP), on every gated route', async () => {
+t('guess: a guesser hammering wrong display codes can NOT lock the real board out (same IP)', async () => {
   const s = await mkSession(staff1); const h = { 'X-Forwarded-For': '10.77.0.1' };
-  let limited = false;
-  for (let i = 0; i < 60; i++) {
-    const r = await api('GET', `/api/sessions/${s.id}/current-qr?code=QQQQ${String(i).padStart(2, '0')}`, { headers: h });
-    if (r.status === 429) { limited = true; break; }
-  }
-  assert.ok(limited, 'wrong-code guessing on current-qr was never limited');
-  eq(await api('GET', `/api/sessions/${s.id}/attendance?code=${s.code}`, { headers: h }), 429, 'even the right code from a locked IP');
-  eq(await api('GET', `/api/sessions/${s.id}?code=${s.code}`, { headers: h }), 429, 'GET /:id from a locked IP');
-  eq(await api('GET', `/api/sessions/${s.id}/attendance?code=${s.code}`, { headers: { 'X-Forwarded-For': '10.77.0.2' } }), 200, 'other IPs unaffected');
+  for (let i = 0; i < 120; i++) await api('GET', `/api/sessions/${s.id}/current-qr?code=QQQQ${String(i).padStart(3, '0')}`, { headers: h });
+  eq(await api('GET', `/api/sessions/${s.id}/current-qr?code=${s.code}`, { headers: h }), 200, "board on the guesser IP");
+  eq(await api('GET', `/api/sessions/${s.id}/attendance?code=${s.code}`, { headers: h }), 200, "attendance from the guesser IP");
+  eq(await api('GET', `/api/sessions/${s.id}?code=${s.code}`, { headers: h }), 200, "GET /:id from the guesser IP");
 });
-t('guess: brute-forcing the code through GET /:id is limited too', async () => {
-  const s = await mkSession(staff1); const h = { 'X-Forwarded-For': '10.77.0.3' };
+t('ip: per-client limits use the real Cloudflare client IP, so edge-shared traffic is not lumped together', async () => {
+  const cf = (ip) => ({ 'cf-connecting-ip': ip, 'cf-ray': 'test-ray' });
+  let a429 = false;
+  for (let i = 0; i < 80; i++) { const r = await api('GET', `/api/sessions/by-code/CFA${String(i).padStart(3, '0')}`, { headers: cf('203.0.113.7') }); if (r.status === 429) { a429 = true; break; } }
+  assert.ok(a429, 'client A was never throttled');
+  const rb = await api('GET', '/api/sessions/by-code/CFB000', { headers: cf('203.0.113.8') });
+  assert.notStrictEqual(rb.status, 429, 'a different client behind the same edge was throttled with A');
+});
+t('ip: a client-supplied CF-Connecting-IP without CF-Ray is ignored (cannot dodge limits by spoofing)', async () => {
   let limited = false;
-  for (let i = 0; i < 60; i++) {
-    const r = await api('GET', `/api/sessions/${s.id}?code=WWWW${String(i).padStart(2, '0')}`, { headers: h });
-    if (r.status === 429) { limited = true; break; }
-  }
-  assert.ok(limited, 'GET /:id?code= guessing was never limited');
+  for (let i = 0; i < 90; i++) { const r = await api('GET', `/api/sessions/by-code/SPF${String(i).padStart(3, '0')}`, { headers: { 'X-Forwarded-For': '10.88.0.1', 'cf-connecting-ip': `198.51.100.${i}` } }); if (r.status === 429) { limited = true; break; } }
+  assert.ok(limited, 'rotating a spoofed CF-Connecting-IP evaded the limiter');
 });
 t('guess: a legit board polling every second is never locked out', async () => {
   const s = await mkSession(staff1); const h = { 'X-Forwarded-For': '10.77.0.4' };

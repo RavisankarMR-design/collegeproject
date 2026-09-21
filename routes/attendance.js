@@ -10,6 +10,7 @@ const { requireAuth } = require('../utils/auth');
 const { rateLimit } = require('../utils/rateLimit');
 const { createFailureTracker } = require('../utils/failureTracker');
 const { serverError, isNum } = require('../utils/http');
+const { clientIp } = require('../utils/ip');
 
 // Students only ever see/type the 4-digit rotating code, never a session
 // identifier — so a code alone has to be matched against every currently
@@ -385,7 +386,7 @@ router.post('/mark', requireAuth('student'), markLimiter, async (req, res) => {
       // Fire-and-forget — heuristics, must never delay or affect this response.
       if (!isAdmin) {
         checkPassAlong(io, session, record, student, lat, lng, deviceId);
-        checkIpMismatch(io, session, record, student, deviceId, req.ip);
+        checkIpMismatch(io, session, record, student, deviceId, clientIp(req));
       }
 
       return res.status(201).json({
