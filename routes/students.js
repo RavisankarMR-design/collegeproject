@@ -1,17 +1,24 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Student = require('../models/Student');
 const Session = require('../models/Session');
 const { requireAuth } = require('../utils/auth');
+const { serverError } = require('../utils/http');
 
 const router = express.Router();
 
-// When the caller passes the sessionId they're acting from (the flagged-list
-// buttons in teacher.html do), require that it's actually their session —
-// one staff account can't reach into another's roster. No sessionId given
-// (e.g. a direct API call) falls back to the old any-staff behavior.
+// A staff account must say which of ITS OWN sessions it is acting from (the
+// flagged-list buttons in teacher.html do) — one staff account can't reach
+// into another's roster, and can't reset arbitrary students with no context.
+// Admin is exempt.
 async function checkOwnsSession(req, res) {
-  if (!req.body.sessionId || req.user.role === 'admin') return true;
-  const session = await Session.findById(req.body.sessionId).select('teacherEmail');
+  if (req.user.role === 'admin') return true;
+  const { sessionId } = req.body;
+  if (typeof sessionId !== 'string' || !mongoose.Types.ObjectId.isValid(sessionId)) {
+    res.status(400).json({ error: 'sessionId of the session you are acting from is required.' });
+    return false;
+  }
+  const session = await Session.findById(sessionId).select('teacherEmail');
   if (!session) {
     res.status(404).json({ error: 'Session not found.' });
     return false;
@@ -39,12 +46,12 @@ router.post('/:rollNo/reset-device', requireAuth('staff'), async (req, res) => {
     if (!student) return res.status(404).json({ error: 'No student found with that roll number.' });
     res.json({ ok: true, rollNo: student.rollNo, email: student.email });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
 // Staff-only. Fully releases a roll number — clears both the device lock
-// and the email<->rollNo identity lock (see routes/attendance.js step 4/5).
+// and the email<->rollNo identity lock (see routes/attendance.js).
 // Needed when a roll number got bound to the wrong account (typo, stray
 // test scan, etc) and the affected student can't self-recover otherwise.
 router.post('/:rollNo/reset-identity', requireAuth('staff'), async (req, res) => {
@@ -55,7 +62,7 @@ router.post('/:rollNo/reset-identity', requireAuth('staff'), async (req, res) =>
     if (!student) return res.status(404).json({ error: 'No student found with that roll number.' });
     res.json({ ok: true, rollNo: student.rollNo, releasedFrom: student.email });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 

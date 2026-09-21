@@ -105,10 +105,10 @@
     }
 
     async function showDetail(id) {
-      // /:id itself is public metadata (no PII), but attendance/flagged/exports
-      // carry roll numbers and names, so those need this staff account's token
-      // (authFetch) or, for the plain download links below, the session's code.
-      const session = await fetch(`/api/sessions/${id}`).then((r) => r.json());
+      // Everything here needs this staff account's token (authFetch). The plain
+      // download links below can't send a header, so they carry the session's
+      // displayCode, which the authenticated lookup returns to the owner.
+      const session = await authFetch(`/api/sessions/${id}`).then((r) => r.json());
       const [records, flags] = await Promise.all([
         authFetch(`/api/sessions/${id}/attendance`).then((r) => r.json()),
         authFetch(`/api/sessions/${id}/flagged`).then((r) => r.json()),

@@ -103,18 +103,34 @@ rigor:
   - This is exactly why BLE/RSSI is scoped as Phase 2 below, not a
     nice-to-have: Bluetooth signal strength degrades with walls/floors in a
     way GPS coordinates structurally cannot.
-- **Identity is still self-declared.** Nothing verifies that the person
-  typing a roll number into the student page is actually that student. The
-  *first* scan for any never-seen roll number binds to whoever's phone
-  submitted it — including a friend doing a one-time favor. Device binding
-  stops *repeat* proxying on the same phone, not a single first-time favor.
-  Fixed properly by college-DB login (see below), not by this codebase alone.
-- **No teacher authentication.** Starting, ending, or extending a session,
-  and reading session history, has no auth check — anyone with the URL can
-  do any of it. Acceptable for a single-teacher demo; not for shared/real use.
-- **Public GitHub repo.** Made public to unblock Render's free deploy flow.
-  No secrets are committed (`.env` is gitignored), but the source itself is
-  visible to anyone.
+- **Identity comes from Google sign-in, but the roll number is still typed.**
+  The account (a verified @rajalakshmi.edu.in email) is real; the roll number
+  bound to it on first scan is not checked against any college record. Roll
+  numbers are validated for format (24070 + 4 digits), one account gets one
+  self-correction, and a roll can't be claimed by two accounts — but someone
+  could still register a classmate's *unclaimed* roll first. Fixed properly by
+  a college-DB email→roll lookup (Phase 2).
+- **Device binding is client-side.** The device id is a hash of a browser
+  fingerprint plus a random per-install id, and the server trusts what the
+  client sends. It stops the normal cases (one phone, several accounts; an
+  account used from a second phone once it has scanned on its first), but a
+  determined person scripting the API can invent device ids. The
+  same-place-same-time heuristic (`possible_proxy_pattern`) is the backstop.
+  Clearing all site data / a private window gives a new install id, which only
+  ever locks the student's own account until staff press "Reset device".
+  **Have everyone scan once on their own phone before the first real class**,
+  so accounts are bound before anyone else could squat them.
+- **The location is reported by the phone.** A spoofed GPS app / DevTools can
+  claim to be in the room. Mitigations: rotating QR (10s window, 20s grace),
+  a geofence whose accuracy margin is capped at the radius, the shared-location
+  heuristic, and an optional IP-geolocation check (`IP_GEOLOOKUP=1`, off by
+  default — it sends IPs to a third party over plain HTTP, so update
+  `privacy.html` before enabling). None of this beats a friend in the room
+  relaying the live QR/code to someone standing just outside.
+- **The 4-digit code has only 10,000 values.** Wrong guesses lock the account
+  out (6 in 10 minutes); the QR path is unaffected.
+- **Public GitHub repo.** No secrets are committed (`.env` is gitignored), but
+  the source itself is visible to anyone.
 
 ## Setup (local)
 
@@ -133,11 +149,23 @@ cluster — just point `MONGO_URI` at it).
   standing in the room, optionally paste enrolled roll numbers, start the
   session. Project this page — the QR rotates every 10s. Use "+5 min" to
   extend a running (or just-expired) session instead of restarting it.
-- Student: open `/student.html` on a phone, enter roll number + name, tap
-  "Scan classroom QR" (or upload a photo of it if no camera), allow camera +
-  location permission.
+- Student: sign in with your college Google account, open `/student.html`, enter
+  your roll number, tap "Scan classroom QR" (or use "Enter the code instead"),
+  allow camera + location permission.
 - History: open `/history.html` to browse past sessions, see who was
   flagged and why, and download a CSV.
+
+## Testing
+
+`npm test` (needs a local MongoDB on 127.0.0.1:27017) starts a throwaway server
+and runs ~80 attack scenarios against it: forged/expired/`alg=none` tokens, QR
+replay and tampering, 4-digit-code guessing, geofence and input abuse (NaN,
+Infinity, strings, huge accuracy), roll/identity/device races, cross-staff
+ownership, live-data and socket gating, credential leakage, flag flooding,
+spreadsheet-formula injection, and rate limits. It never touches production.
+
+Optional env vars: `EXTRA_STAFF_EMAILS` (comma-separated staff emails),
+`IP_GEOLOOKUP=1` (see limitations).
 
 ## Deployment
 

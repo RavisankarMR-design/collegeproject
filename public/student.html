@@ -54,16 +54,31 @@
       document.getElementById('sign-out-link').onclick = (e) => { e.preventDefault(); signOut(); };
     }
 
-    // Device id derived from stable browser/hardware signals (canvas render +
-    // navigator/screen properties) instead of a random UUID, so clearing
-    // localStorage/private-window no longer resets a student's binding.
-    // ponytail: still a browser fingerprint, not a hardware ID — a different
-    // browser or a fingerprint-spoofing extension still gets a new id. Real
-    // hardware ID (Android/iOS) needs a native app; see Phase 2.
-    async function getDeviceId() {
-      const cached = localStorage.getItem('device_id');
-      if (cached) return cached;
+    // Device id = hash(browser/hardware fingerprint + a random per-install id).
+    // The fingerprint alone (user agent, screen, canvas) is IDENTICAL for every
+    // phone of the same model/OS, so two honest classmates with the same iPhone
+    // would collide and one could never mark attendance. The random install id
+    // (kept in localStorage AND a long-lived cookie, so clearing one doesn't
+    // reset it) makes each phone distinct; the fingerprint still keeps it tied
+    // to this kind of device.
+    // ponytail: still client-side — clearing all site data, or a private window,
+    // gives a new install id. That only ever LOCKS the student's own account
+    // (staff reset fixes it); it can't unlock someone else's, because their
+    // binding lives on the server. Real hardware binding needs a native app.
+    function getInstallId() {
+      let id = null;
+      try { id = localStorage.getItem('install_id'); } catch {}
+      if (!id) {
+        const m = document.cookie.match(/(?:^|; )install_id=([^;]+)/);
+        if (m) id = m[1];
+      }
+      if (!id) id = crypto.randomUUID();
+      try { localStorage.setItem('install_id', id); } catch {}
+      document.cookie = 'install_id=' + id + '; max-age=' + 60 * 60 * 24 * 400 + '; path=/; SameSite=Lax';
+      return id;
+    }
 
+    async function getDeviceId() {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       ctx.textBaseline = 'top';
@@ -78,13 +93,11 @@
         screen.width, screen.height, screen.colorDepth,
         Intl.DateTimeFormat().resolvedOptions().timeZone,
         canvasData,
+        getInstallId(),
       ].join('|');
 
       const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
-      const id = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-
-      localStorage.setItem('device_id', id);
-      return id;
+      return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
     }
 
     let scanner = null;
@@ -177,7 +190,10 @@
 
     function showMsg(text, ok) {
       const div = document.getElementById('result');
-      div.innerHTML = `<div class="msg ${ok ? 'ok' : 'err'}">${text}</div>`;
+      const box = document.createElement('div');
+      box.className = 'msg ' + (ok ? 'ok' : 'err');
+      box.textContent = text; // never innerHTML: some messages can echo server/user text
+      div.replaceChildren(box);
     }
 
     // A roll number typo only gets one free silent auto-correction server-side

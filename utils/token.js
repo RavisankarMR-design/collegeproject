@@ -40,12 +40,12 @@ function verifyToken(secret, sessionId, windowIndex, token, windowSeconds) {
   const now = currentWindow(windowSeconds);
   const windowIndexNum = Number(windowIndex);
 
-  if (!Number.isInteger(windowIndexNum)) return { valid: false, reason: 'Malformed QR payload' };
-  if (windowIndexNum > now) return { valid: false, reason: 'QR from the future — clock mismatch' };
+  if (!Number.isInteger(windowIndexNum)) return { valid: false, forged: true, reason: 'Malformed QR payload' };
+  if (windowIndexNum > now) return { valid: false, forged: true, reason: 'QR from the future — clock mismatch' };
   if (now - windowIndexNum > 1) return { valid: false, reason: 'QR expired — rescan the current code' };
 
   const expected = generateToken(secret, sessionId, windowIndexNum);
-  if (expected !== token) return { valid: false, reason: 'Token does not match — tampered or forged QR' };
+  if (expected !== token) return { valid: false, forged: true, reason: 'Token does not match — tampered or forged QR' };
 
   return { valid: true };
 }

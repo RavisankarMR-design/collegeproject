@@ -1,33 +1,29 @@
 const express = require('express');
 const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
 const Session = require('../models/Session');
 const Attendance = require('../models/Attendance');
 const FlaggedAttempt = require('../models/FlaggedAttempt');
 const { currentWindow, generateToken, shortCode } = require('../utils/token');
-const { requireAuth, JWT_SECRET } = require('../utils/auth');
+const { requireAuth } = require('../utils/auth');
+const { canAccessSession, bearer, ownsSession } = require('../utils/access');
+const { rateLimit } = require('../utils/rateLimit');
+const { serverError, isNum } = require('../utils/http');
+const { createFailureTracker } = require('../utils/failureTracker');
 
 const router = express.Router();
 
-// Names, roll numbers, and the live rotating QR are only meant for the
-// teacher who owns this session, or a second device (smart board/projector)
-// that already has the session's displayCode — knowing the sessionId alone
-// (a guessable-ish Mongo ObjectId) isn't enough. displayCode is handed out
-// by the same endpoints a random guesser wouldn't have hit yet, so it acts
-// as the shared secret for that "second device" flow.
-function canAccessSession(session, req) {
-  const code = req.query.code || req.body.code;
-  if (code && String(code).trim().toUpperCase() === session.displayCode) return true;
+// What a caller has to prove to see a session's live data (see utils/access.js).
+const creds = (req) => ({ code: req.query.code, token: bearer(req) });
 
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) return false;
-  try {
-    const user = jwt.verify(token, JWT_SECRET);
-    return user.role === 'admin' || (user.role === 'staff' && user.email === session.teacherEmail);
-  } catch {
-    return false;
-  }
+// Looking a session up by its 6-char code is the one unauthenticated way in, so
+// it is throttled against enumeration (32^6 combinations, but still).
+const byCodeLimiter = rateLimit({ windowMs: 60_000, max: 30 });
+
+// A spreadsheet treats a cell starting with = + - @ as a formula. Names/roll
+// numbers are student-influenced, so neutralise them in exports.
+function safeCell(value) {
+  const s = value == null ? '' : String(value);
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
 }
 
 function csvCell(value) {
@@ -44,6 +40,21 @@ function generateDisplayCode() {
   return code;
 }
 
+// Full summary — only ever returned to someone who passed canAccessSession.
+function fullSummary(session) {
+  return {
+    sessionId: session._id,
+    subject: session.subject,
+    teacherName: session.teacherName,
+    classroom: session.classroom,
+    windowSeconds: session.windowSeconds,
+    endTime: session.endTime,
+    active: session.active,
+    rosterSize: session.roster.length,
+    displayCode: session.displayCode,
+  };
+}
+
 // Past + current sessions for the history page, newest first, with how many
 // students were marked present in each. `secret` must never leave the server.
 // Staff-only, and scoped to that staff member's own sessions — admin
@@ -52,7 +63,10 @@ router.get('/', requireAuth('staff'), async (req, res) => {
   try {
     const sessions = await Session.find({ teacherEmail: req.user.email }).select('-secret').sort({ startTime: -1 }).limit(100);
 
-    const counts = await Attendance.aggregate([{ $group: { _id: '$session', count: { $sum: 1 } } }]);
+    const counts = await Attendance.aggregate([
+      { $match: { session: { $in: sessions.map((s) => s._id) } } },
+      { $group: { _id: '$session', count: { $sum: 1 } } },
+    ]);
     const countBySession = Object.fromEntries(counts.map((c) => [String(c._id), c.count]));
 
     res.json(sessions.map((s) => ({
@@ -66,7 +80,7 @@ router.get('/', requireAuth('staff'), async (req, res) => {
       presentCount: countBySession[String(s._id)] || 0,
     })));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -81,12 +95,18 @@ router.post('/', requireAuth('staff'), async (req, res) => {
     const teacherName = req.user.name;
     const teacherEmail = req.user.email;
     const { subject, lat, lng, radiusMeters, durationMinutes, roster } = req.body;
-    if (!subject || lat == null || lng == null || !durationMinutes) {
-      return res.status(400).json({ error: 'subject, lat, lng, durationMinutes are required' });
+    const bad = (msg) => res.status(400).json({ error: msg });
+
+    if (typeof subject !== 'string' || !subject.trim() || subject.length > 100) return bad('A subject (up to 100 characters) is required.');
+    if (!isNum(lat) || !isNum(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return bad('A valid classroom location is required.');
+    if (radiusMeters != null && (!isNum(radiusMeters) || radiusMeters < 5 || radiusMeters > 500)) return bad('Radius must be between 5 and 500 metres.');
+    if (!isNum(durationMinutes) || durationMinutes < 1 || durationMinutes > 480) return bad('Duration must be between 1 and 480 minutes.');
+    if (roster != null && (!Array.isArray(roster) || roster.length > 500 || roster.some((r) => typeof r !== 'string' && typeof r !== 'number'))) {
+      return bad('Roster must be a list of at most 500 roll numbers.');
     }
 
     const normalizedRoster = Array.isArray(roster)
-      ? [...new Set(roster.map((r) => String(r).trim().toUpperCase()).filter(Boolean))]
+      ? [...new Set(roster.map((r) => String(r).trim().toUpperCase().slice(0, 30)).filter(Boolean))]
       : [];
 
     // displayCode has a uniqueness constraint; collisions are astronomically
@@ -96,7 +116,7 @@ router.post('/', requireAuth('staff'), async (req, res) => {
     for (let attempt = 0; !session; attempt++) {
       try {
         session = await Session.create({
-          subject,
+          subject: subject.trim(),
           teacherName,
           teacherEmail,
           secret: crypto.randomBytes(16).toString('hex'),
@@ -110,77 +130,65 @@ router.post('/', requireAuth('staff'), async (req, res) => {
       }
     }
 
-    res.status(201).json({
-      sessionId: session._id,
-      subject: session.subject,
-      teacherName: session.teacherName,
-      classroom: session.classroom,
-      windowSeconds: session.windowSeconds,
-      endTime: session.endTime,
-      rosterSize: session.roster.length,
-      displayCode: session.displayCode,
-    });
+    res.status(201).json(fullSummary(session));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
-// Session summary for the teacher panel (subject, roster size, live status).
+// Session summary. The sessionId alone (which every scanning student learns
+// from the QR) only gets a bare status; the displayCode and the classroom
+// coordinates need proof of access — otherwise this endpoint would hand the
+// displayCode to anyone and undo the gating on every endpoint below.
 router.get('/:id', async (req, res) => {
   try {
+    if (codeGuesses.lockedFor(req.ip)) return res.status(429).json({ error: 'Too many failed attempts — try again later.' });
     const session = await Session.findById(req.params.id);
     if (!session) return res.status(404).json({ error: 'Session not found' });
-    res.json({
-      sessionId: session._id,
-      subject: session.subject,
-      teacherName: session.teacherName,
-      classroom: session.classroom,
-      windowSeconds: session.windowSeconds,
-      endTime: session.endTime,
-      active: session.active,
-      rosterSize: session.roster.length,
-      displayCode: session.displayCode,
-    });
+    if (canAccessSession(session, creds(req))) return res.json(fullSummary(session));
+    if (req.query.code) codeGuesses.record(req.ip); // a wrong code here is a guess, same as on the gated endpoints
+    res.json({ sessionId: session._id, subject: session.subject, active: session.active, endTime: session.endTime });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
 // Resolves a short human-typed join code to the same session-summary shape
 // as GET /:id, so a second device (a smart board with no easy way to paste
 // a link) can join a live session by typing a few characters instead.
-router.get('/by-code/:code', async (req, res) => {
+router.get('/by-code/:code', byCodeLimiter, async (req, res) => {
   try {
     const code = String(req.params.code).trim().toUpperCase();
     const session = await Session.findOne({ displayCode: code });
     if (!session) return res.status(404).json({ error: 'No session found for that code.' });
-    res.json({
-      sessionId: session._id,
-      subject: session.subject,
-      teacherName: session.teacherName,
-      classroom: session.classroom,
-      windowSeconds: session.windowSeconds,
-      endTime: session.endTime,
-      active: session.active,
-      rosterSize: session.roster.length,
-      displayCode: session.displayCode,
-    });
+    res.json(fullSummary(session));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
+
+// Wrong displayCode guesses against the gated endpoints, per IP. A real board
+// never gets a 403 (it holds the code), so 30 in a minute is someone guessing.
+const codeGuesses = createFailureTracker({ maxFailures: 30, windowMs: 60_000, lockMs: 5 * 60_000 });
+
+// Loads a session and enforces canAccessSession in one place for the gated GETs.
+async function gatedSession(req, res, fields = 'teacherEmail displayCode') {
+  if (codeGuesses.lockedFor(req.ip)) { res.status(429).json({ error: 'Too many failed attempts — try again later.' }); return null; }
+  const session = await Session.findById(req.params.id).select(fields);
+  if (!session) { res.status(404).json({ error: 'Session not found' }); return null; }
+  if (!canAccessSession(session, creds(req))) { codeGuesses.record(req.ip); res.status(403).json({ error: 'Not authorized for this session.' }); return null; }
+  return session;
+}
 
 // Flagged (rejected, proxy-like) scan attempts for the teacher panel.
 router.get('/:id/flagged', async (req, res) => {
   try {
-    const session = await Session.findById(req.params.id).select('teacherEmail displayCode');
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-    if (!canAccessSession(session, req)) return res.status(403).json({ error: 'Not authorized for this session.' });
-
-    const flags = await FlaggedAttempt.find({ session: req.params.id }).sort({ createdAt: -1 });
+    if (!(await gatedSession(req, res))) return;
+    // deviceId is the credential the server trusts for device binding — never hand it out.
+    const flags = await FlaggedAttempt.find({ session: req.params.id }).select('-deviceId').sort({ createdAt: -1 }).limit(500);
     res.json(flags);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -188,9 +196,8 @@ router.get('/:id/flagged', async (req, res) => {
 // Returns the QR payload string for the CURRENT rotating window.
 router.get('/:id/current-qr', async (req, res) => {
   try {
-    const session = await Session.findById(req.params.id);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-    if (!canAccessSession(session, req)) return res.status(403).json({ error: 'Not authorized for this session.' });
+    const session = await gatedSession(req, res, '+secret');
+    if (!session) return;
     if (!session.active || Date.now() > session.endTime.getTime()) {
       return res.status(410).json({ error: 'Session has ended' });
     }
@@ -204,23 +211,21 @@ router.get('/:id/current-qr', async (req, res) => {
 
     res.json({ payload, msLeftInWindow, shortCode: shortCode(token), displayCode: session.displayCode });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
 // Live list for the teacher dashboard.
 router.get('/:id/attendance', async (req, res) => {
   try {
-    const session = await Session.findById(req.params.id).select('teacherEmail displayCode');
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-    if (!canAccessSession(session, req)) return res.status(403).json({ error: 'Not authorized for this session.' });
-
+    if (!(await gatedSession(req, res))) return;
     const records = await Attendance.find({ session: req.params.id })
+      .select('-deviceId')
       .populate('student', 'rollNo name')
       .sort({ markedAt: 1 });
     res.json(records);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -237,8 +242,8 @@ async function loadExportRows(sessionId) {
   const rows = [
     ['Roll No', 'Name', 'Marked At', 'Distance (m)', 'GPS Accuracy (m)', 'Borderline'],
     ...records.map((r) => [
-      r.student ? r.student.rollNo : '',
-      r.student ? r.student.name : '',
+      safeCell(r.student ? r.student.rollNo : ''),
+      safeCell(r.student ? r.student.name : ''),
       new Date(r.markedAt).toISOString(),
       Math.round(r.distanceMeters),
       r.accuracyMeters == null ? '' : Math.round(r.accuracyMeters),
@@ -257,14 +262,10 @@ function escHtml(s) {
 }
 
 // Attendance for one session as a downloadable CSV. Requires the session's
-// displayCode (?code=) or the owning staff/admin's bearer token — see
-// canAccessSession above.
+// displayCode (?code=) or the owning staff/admin's bearer token.
 router.get('/:id/export.csv', async (req, res) => {
   try {
-    const session = await Session.findById(req.params.id).select('teacherEmail displayCode');
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-    if (!canAccessSession(session, req)) return res.status(403).json({ error: 'Not authorized for this session.' });
-
+    if (!(await gatedSession(req, res))) return;
     const data = await loadExportRows(req.params.id);
     if (!data) return res.status(404).json({ error: 'Session not found' });
 
@@ -273,7 +274,7 @@ router.get('/:id/export.csv', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${data.filenameBase}.csv"`);
     res.send(csv);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -281,10 +282,7 @@ router.get('/:id/export.csv', async (req, res) => {
 // with the Excel MIME type/extension, no xlsx-writing library needed.
 router.get('/:id/export.xls', async (req, res) => {
   try {
-    const session = await Session.findById(req.params.id).select('teacherEmail displayCode');
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-    if (!canAccessSession(session, req)) return res.status(403).json({ error: 'Not authorized for this session.' });
-
+    if (!(await gatedSession(req, res))) return;
     const data = await loadExportRows(req.params.id);
     if (!data) return res.status(404).json({ error: 'Session not found' });
 
@@ -298,16 +296,21 @@ router.get('/:id/export.xls', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${data.filenameBase}.xls"`);
     res.send(html);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
-// Push a live session's end time further out, e.g. class ran long.
+// Push a live session's end time further out, e.g. class ran long. Only the
+// session's own teacher (or an admin) — any staff account could otherwise
+// stretch or kill another teacher's class.
 router.post('/:id/extend', requireAuth('staff'), async (req, res) => {
   try {
-    const minutes = Number(req.body.minutes) || 15;
+    const minutes = req.body.minutes === undefined ? 15 : Number(req.body.minutes);
+    if (!isNum(minutes) || minutes < 1 || minutes > 120) return res.status(400).json({ error: 'Extend by 1 to 120 minutes.' });
+
     const session = await Session.findById(req.params.id);
     if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!ownsSession(session, req.user)) return res.status(403).json({ error: 'This session belongs to a different staff account.' });
 
     // Extend from now if it already ended, otherwise add onto the current end time.
     const base = Math.max(session.endTime.getTime(), Date.now());
@@ -317,17 +320,19 @@ router.post('/:id/extend', requireAuth('staff'), async (req, res) => {
 
     res.json({ ok: true, endTime: session.endTime });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
 router.post('/:id/end', requireAuth('staff'), async (req, res) => {
   try {
-    const session = await Session.findByIdAndUpdate(req.params.id, { active: false }, { new: true });
+    const session = await Session.findById(req.params.id).select('teacherEmail');
     if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!ownsSession(session, req.user)) return res.status(403).json({ error: 'This session belongs to a different staff account.' });
+    await Session.updateOne({ _id: session._id }, { active: false });
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 

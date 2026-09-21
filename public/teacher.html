@@ -62,6 +62,7 @@
           <div style="margin-top:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
             <span style="font-size:.72rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:.04em;">Display on another screen:</span>
             <span id="display-code" style="font-size:1.3rem; font-weight:700; letter-spacing:.15em; background:var(--surface-2); padding:4px 12px; border-radius:8px;"></span>
+            <button id="show-code-btn" class="secondary" style="width:auto; margin-top:0; padding:6px 12px; font-size:.8rem;">Show</button>
             <button id="copy-link-btn" class="secondary" style="width:auto; margin-top:0; padding:6px 12px; font-size:.8rem;">🔗 Copy link instead</button>
           </div>
         </div>
@@ -147,11 +148,25 @@
     // flagged, instead of waiting for the next poll (up to 3s away). Polling
     // stays in place underneath as a fallback if the socket ever drops.
     const socket = io();
+    // The room carries names and roll numbers, so joining needs proof of access: the
+    // session's display code, or this staff account's own token.
+    // Hidden by default: this page is often on the projector, and anyone who can read
+    // the display code can pull the live QR from their own phone and relay it.
+    let codeShown = false;
+    function renderDisplayCode() {
+      document.getElementById('display-code').textContent = codeShown ? (displayCode || '') : '••••••';
+      document.getElementById('show-code-btn').textContent = codeShown ? 'Hide' : 'Show';
+    }
+    document.getElementById('show-code-btn').onclick = () => { codeShown = !codeShown; renderDisplayCode(); };
+    function joinRoom() {
+      const a = getAuth();
+      socket.emit('join', { sessionId, code: displayCode, token: a ? a.token : undefined });
+    }
     socket.on('present', () => { if (sessionId) refreshList(); });
     socket.on('flagged', () => { if (sessionId) refreshFlagged(); });
     // Room membership doesn't survive a dropped connection — rejoin whenever
     // the socket (re)connects, not just on the first "start session" click.
-    socket.on('connect', () => { if (sessionId) socket.emit('join', sessionId); });
+    socket.on('connect', () => { if (sessionId) joinRoom(); });
 
     // A live start→end countdown, not just a static "ends at" clock time —
     // that way clicking +5 min is immediately, visibly obvious (the number
@@ -265,13 +280,14 @@
       rosterSize = data.rosterSize;
       sessionEndTime = new Date(data.endTime);
       localStorage.setItem('active_session', sessionId);
-      socket.emit('join', sessionId);
+      localStorage.setItem('active_code', displayCode || '');
+      joinRoom();
 
       document.getElementById('subject-title').textContent = data.subject;
       document.getElementById('radius-badge').textContent = `📍 ${data.classroom.radiusMeters}m radius`;
       document.getElementById('roster-badge').textContent = rosterSize > 0 ? `👥 ${rosterSize} enrolled` : '👥 open roster';
       document.getElementById('count-label').textContent = rosterSize > 0 ? `Present / ${rosterSize}` : 'Present';
-      document.getElementById('display-code').textContent = data.displayCode || '';
+      renderDisplayCode();
       renderEndTimeBadge();
 
       document.getElementById('setup').style.display = 'none';
@@ -292,11 +308,12 @@
     // board connected to the projector. Checked before the localStorage
     // restore so a shared link always wins over whatever this browser had
     // open before.
-    async function loadSessionById(id) {
+    async function loadSessionById(id, code) {
       try {
-        const res = await fetch(`/api/sessions/${id}`);
+        const res = await authFetch(`/api/sessions/${encodeURIComponent(id)}?code=${encodeURIComponent(code || '')}`);
         if (!res.ok) throw new Error('gone');
         const data = await res.json();
+        if (!data.displayCode) throw new Error('no access'); // a bare status means we hold no credentials for it
         if (!data.active || new Date(data.endTime) <= new Date()) throw new Error('ended');
         enterLiveMode(data);
         return true;
@@ -346,12 +363,13 @@
     }
 
     async function restoreSession() {
-      const urlSessionId = new URLSearchParams(location.search).get('session');
-      if (urlSessionId && (await loadSessionById(urlSessionId))) return;
+      const params = new URLSearchParams(location.search);
+      const urlSessionId = params.get('session');
+      if (urlSessionId && (await loadSessionById(urlSessionId, params.get('code')))) return;
 
       const savedId = localStorage.getItem('active_session');
-      if (savedId && (await loadSessionById(savedId))) return;
-      if (savedId) localStorage.removeItem('active_session');
+      if (savedId && (await loadSessionById(savedId, localStorage.getItem('active_code')))) return;
+      if (savedId) { localStorage.removeItem('active_session'); localStorage.removeItem('active_code'); }
 
       await loadOwnActiveSession();
     }
@@ -366,7 +384,7 @@
 
     document.getElementById('copy-link-btn').onclick = async () => {
       const btn = document.getElementById('copy-link-btn');
-      const link = `${location.origin}/teacher.html?session=${sessionId}`;
+      const link = `${location.origin}/teacher.html?session=${sessionId}&code=${displayCode}`;
       try {
         await navigator.clipboard.writeText(link);
         const original = btn.textContent;
@@ -405,6 +423,7 @@
       if (!confirm('End this session? Students will no longer be able to mark attendance.')) return;
       await authFetch(`/api/sessions/${sessionId}/end`, { method: 'POST' });
       localStorage.removeItem('active_session');
+      localStorage.removeItem('active_code');
       alert('Session ended.');
       location.reload();
     };

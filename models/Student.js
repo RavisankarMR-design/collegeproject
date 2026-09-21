@@ -17,12 +17,16 @@ const StudentSchema = new mongoose.Schema({
   // else's unclaimed roll by repeatedly "correcting" is no longer free;
   // staff must use reset-identity for anything past the first fix.
   rollLocked: { type: Boolean, default: false },
-  // Set on first successful scan. unique+sparse: a device can only ever be
-  // the first-binder for one student, globally — closes the gap where one
-  // phone marked several different roll numbers present (confirmed live
-  // before this fix). sparse allows many students to still have deviceId:
-  // null before their first scan.
-  deviceId: { type: String, default: null, unique: true, sparse: true },
+  // Set on first successful scan; a device can only ever be the first-binder
+  // for one student, globally (see the partial unique index below) — closes the
+  // gap where one phone marked several different roll numbers present.
+  // Left unset (not null) until bound, and reset-device writes null.
+  deviceId: { type: String, default: undefined },
 });
+
+// Partial, not sparse: a sparse unique index still indexes an explicit null, so
+// the second unbound student / second admin / second reset-device call hit an
+// E11000 duplicate-key 500. Only real string device ids are constrained here.
+StudentSchema.index({ deviceId: 1 }, { unique: true, partialFilterExpression: { deviceId: { $type: 'string' } } });
 
 module.exports = mongoose.model('Student', StudentSchema);

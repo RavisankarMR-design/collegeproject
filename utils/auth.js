@@ -5,7 +5,12 @@ const ALLOWED_DOMAIN = 'rajalakshmi.edu.in';
 
 // To add a staff member: add their exact @rajalakshmi.edu.in email below.
 // Anyone else with an email on the allowed domain is treated as a student.
-const STAFF_EMAILS = ['bhuvaneswaran@rajalakshmi.edu.in'];
+// Extra staff can also be added without a code change via the
+// EXTRA_STAFF_EMAILS env var (comma-separated).
+const STAFF_EMAILS = [
+  'bhuvaneswaran@rajalakshmi.edu.in',
+  ...(process.env.EXTRA_STAFF_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean),
+];
 
 // Admins bypass the domain check entirely and can access any page/action —
 // no student/staff restriction applies to them.
@@ -64,7 +69,9 @@ async function verifyGoogleIdToken(idToken) {
 // configured, and never in production (see server.js) — a dev-only stand-in
 // until real Google sign-in is set up.
 function verifyEmail(rawEmail) {
-  return identityFor(String(rawEmail || '').toLowerCase().trim());
+  // Strictly a string: String(["a@x"]) would otherwise flatten an array into a valid-looking email.
+  if (typeof rawEmail !== 'string') throw new SignInError('Please sign in with your college email.');
+  return identityFor(rawEmail.toLowerCase().trim());
 }
 
 function issueSessionToken({ email, name, role }) {
