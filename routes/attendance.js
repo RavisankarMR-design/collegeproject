@@ -14,12 +14,15 @@ const { rateLimit } = require('../utils/rateLimit');
 // active session's current (and previous) window. Cheap: only sessions
 // with active:true and a future endTime are candidates, which in practice
 // is a handful of concurrently running classes, not the whole collection.
-async function findSessionByShortCode(code) {
+// Two concurrent classes can (rarely, ~1 in 10,000) show the same 4 digits in
+// the same window — when that happens, the student's own GPS picks the
+// session whose classroom they're actually standing in.
+async function findSessionByShortCode(code, lat, lng) {
   const candidates = await Session.find({ active: true, endTime: { $gt: new Date() } });
-  for (const session of candidates) {
-    if (verifyShortCode(session.secret, session._id, code, session.windowSeconds).valid) return session;
-  }
-  return null;
+  const matches = candidates.filter((s) => verifyShortCode(s.secret, s._id, code, s.windowSeconds).valid);
+  if (matches.length <= 1) return matches[0] || null;
+  const dist = (s) => distanceMeters(lat, lng, s.classroom.lat, s.classroom.lng);
+  return matches.reduce((best, s) => (dist(s) < dist(best) ? s : best));
 }
 
 async function flag(io, session, { rollNo, name, deviceId }, reason, detail, distance, accuracy) {
@@ -84,8 +87,12 @@ function isPrivateIp(ip) {
 // inside the classroom while the connection's real IP address geolocates
 // somewhere else entirely — IP geolocation is coarse (city-level, and
 // useless on carrier NAT/VPNs) so this is a loose sanity check, not proof.
+// Off unless IP_GEOLOOKUP=1: ip-api.com's free tier is plain HTTP only, so this
+// sends each student's IP to a third party unencrypted — which public/privacy.html
+// says never happens. Enable only after updating that page.
 async function checkIpMismatch(io, session, record, student, deviceId, ip) {
   try {
+    if (process.env.IP_GEOLOOKUP !== '1') return;
     if (!ip || isPrivateIp(ip)) return;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2500);
@@ -114,7 +121,8 @@ const MAX_ACCEPTABLE_ACCURACY_METERS = 100;
 const router = express.Router();
 
 // Bounds short-code brute-forcing (4-digit space) and general abuse of the mark endpoint.
-const markLimiter = rateLimit({ windowMs: 60_000, max: 20 });
+// Keyed per signed-in user, not per IP: a whole class shares one campus WiFi IP.
+const markLimiter = rateLimit({ windowMs: 60_000, max: 20, key: (req) => req.user.email });
 
 // Student submits either the raw QR payload they scanned, OR — when the QR
 // can't be displayed (broken projector, etc) — the session's short display
@@ -124,7 +132,7 @@ const markLimiter = rateLimit({ windowMs: 60_000, max: 20 });
 // client-side (see public/student.html) and stored persistently on that
 // device. Identity (email + name) comes only from the verified Google
 // sign-in, never from the request body.
-router.post('/mark', markLimiter, requireAuth('student'), async (req, res) => {
+router.post('/mark', requireAuth('student'), markLimiter, async (req, res) => {
   try {
     const io = req.app.get('io');
     const { email, name, role } = req.user;
@@ -166,7 +174,7 @@ router.post('/mark', markLimiter, requireAuth('student'), async (req, res) => {
       // current (and previous) window — cheap at the scale of concurrently
       // running classes, and means the student never has to know or type
       // which session they're in, just the code shown on their teacher's screen.
-      session = await findSessionByShortCode(code);
+      session = await findSessionByShortCode(code, lat, lng);
       if (!session) return res.status(404).json({ error: 'Code expired or incorrect — check the live code and try again' });
     }
 

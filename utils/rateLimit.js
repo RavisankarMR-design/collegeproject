@@ -1,14 +1,26 @@
 // ponytail: in-memory per-process limiter — fine for this single-instance
 // deploy; swap for a shared store (Redis) if this ever runs multiple instances.
-function rateLimit({ windowMs, max }) {
+//
+// `key` picks who is being limited. Default is the client IP, which is wrong
+// for anything a whole class does at once from one campus WiFi (all students
+// share one public IP) — those routes pass a per-user key instead.
+function rateLimit({ windowMs, max, key = (req) => req.ip }) {
   const hits = new Map(); // key -> [timestamps]
 
-  return (req, res, next) => {
-    const key = req.ip;
+  // Without this, every distinct key stays in the map forever.
+  setInterval(() => {
     const now = Date.now();
-    const recent = (hits.get(key) || []).filter((t) => now - t < windowMs);
+    for (const [k, times] of hits) {
+      if (times.every((t) => now - t >= windowMs)) hits.delete(k);
+    }
+  }, windowMs).unref();
+
+  return (req, res, next) => {
+    const k = key(req);
+    const now = Date.now();
+    const recent = (hits.get(k) || []).filter((t) => now - t < windowMs);
     recent.push(now);
-    hits.set(key, recent);
+    hits.set(k, recent);
 
     if (recent.length > max) {
       return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });

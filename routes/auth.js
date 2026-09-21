@@ -4,7 +4,9 @@ const { rateLimit } = require('../utils/rateLimit');
 
 const router = express.Router();
 
-const loginLimiter = rateLimit({ windowMs: 60_000, max: 10 });
+// Per IP, but generous: a whole class signs in at once from one campus WiFi IP.
+// Google verifies the token itself, so there's no password to brute-force here.
+const loginLimiter = rateLimit({ windowMs: 60_000, max: 300 });
 
 // Public — no secret in it, just tells login.html whether Google sign-in is
 // configured yet, and which client id to initialize it with.
