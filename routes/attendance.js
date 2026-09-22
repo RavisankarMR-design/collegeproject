@@ -150,7 +150,10 @@ function isAllowedBrowser(userAgent) {
   if (/iPhone|iPad|iPod/.test(ua)) {
     return /Safari/.test(ua) && !/FxiOS|EdgiOS|OPiOS|UCBrowser/.test(ua);
   }
-  return /Chrome/.test(ua) && !/SamsungBrowser|Edg\/|OPR\/|Firefox|UCBrowser|MiuiBrowser/.test(ua);
+  // Edg (not just "Edg/") to also catch Edge-for-Android's own token,
+  // "EdgA/" — confirmed missing live: a real Android Edge UA slipped
+  // through with the slash-anchored version.
+  return /Chrome/.test(ua) && !/SamsungBrowser|Edg|OPR\/|Firefox|UCBrowser|MiuiBrowser/.test(ua);
 }
 
 const router = express.Router();

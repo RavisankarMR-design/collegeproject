@@ -64,7 +64,7 @@
     function isAllowedBrowser() {
       const ua = navigator.userAgent;
       if (/iPhone|iPad|iPod/.test(ua)) return /Safari/.test(ua) && !/FxiOS|EdgiOS|OPiOS|UCBrowser/.test(ua);
-      return /Chrome/.test(ua) && !/SamsungBrowser|Edg\/|OPR\/|Firefox|UCBrowser|MiuiBrowser/.test(ua);
+      return /Chrome/.test(ua) && !/SamsungBrowser|Edg|OPR\/|Firefox|UCBrowser|MiuiBrowser/.test(ua);
     }
     if (auth && auth.role !== 'admin' && !isAllowedBrowser()) {
       document.querySelector('.card').innerHTML =

@@ -679,6 +679,9 @@ t('browser: Chrome-Android, or Safari/Chrome-iOS; other browsers rejected on bot
     'Firefox-on-iOS (FxiOS)': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/120.0 Mobile/15E148 Safari/604.1',
     'Firefox/Android (genuinely different engine there)': 'Mozilla/5.0 (Android 13; Mobile; rv:120.0) Gecko/120.0 Firefox/120.0',
     'Samsung Internet (says "Chrome" too)': 'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.36',
+    // Confirmed missing live: Edge-for-Android's own token is "EdgA/", not
+    // "Edg/" (desktop's token) — a slash-anchored check let it through.
+    'Edge for Android (EdgA/, not desktop\'s Edg/)': 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 EdgA/120.0.0.0',
     'no UA at all': '',
   };
   for (const [label, ua] of Object.entries(allowed)) {
