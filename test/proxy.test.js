@@ -662,18 +662,21 @@ t('headers: basic hardening headers are set', async () => {
   assert.ok(res.headers.get('x-frame-options'));
   assert.ok(!res.headers.get('x-powered-by'), 'x-powered-by advertises the framework');
 });
-t('browser: real Chrome-Android or any iOS browser can mark; other Android browsers rejected', async () => {
+t('browser: Chrome-Android, or Safari/Chrome-iOS; other browsers rejected on both platforms', async () => {
   const s = await mkSession(await login('bhuvaneswaran@rajalakshmi.edu.in'));
   const allowed = {
     'Chrome/Android': REAL_DEVICE_UA,
     'Safari/iOS': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-    // Apple requires every iOS browser to run Safari's WebKit engine
-    // underneath (India isn't covered by the EU/UK exceptions to that
-    // rule), so these are functionally the same as Safari there.
+    // Same WebKit engine as Safari either way (Apple requires it; India
+    // isn't covered by the EU/UK exceptions to that rule) — allowed because
+    // it's one of the two browsers people actually have, not because the
+    // engine differs.
     'Chrome-on-iOS (CriOS)': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.0.0 Mobile/15E148 Safari/604.1',
-    'Firefox-on-iOS (FxiOS)': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/120.0 Mobile/15E148 Safari/604.1',
   };
   const blocked = {
+    // Also just WebKit underneath, but excluded anyway to cap the number of
+    // apps one student could switch between on their own iPhone.
+    'Firefox-on-iOS (FxiOS)': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/120.0 Mobile/15E148 Safari/604.1',
     'Firefox/Android (genuinely different engine there)': 'Mozilla/5.0 (Android 13; Mobile; rv:120.0) Gecko/120.0 Firefox/120.0',
     'Samsung Internet (says "Chrome" too)': 'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.36',
     'no UA at all': '',
