@@ -136,16 +136,19 @@ async function checkIpMismatch(io, session, record, student, deviceId, ip) {
 // ever needs a much larger legitimate radius (e.g. an outdoor field).
 const MAX_ACCEPTABLE_ACCURACY_METERS = 100;
 
-// Real Chrome-on-Android or real Safari-on-iOS only. On iOS every browser
-// (Chrome, Firefox, Edge) is required by Apple to use Safari's WebKit engine
-// and still reports "Safari" in its UA, so they're told apart by their own
-// extra token (CriOS/FxiOS/EdgiOS/OPiOS). On Android, browsers built on
-// Chromium (Samsung Internet, Edge, Opera, Brave) also include "Chrome" in
-// their UA, so those are excluded the same way.
+// Real Chrome-on-Android, or ANY browser on iOS. Apple requires every iOS
+// browser (Chrome/CriOS, Firefox/FxiOS, Edge/EdgiOS...) to run its own
+// WebKit engine underneath — the EU (DMA) and UK have since forced Apple to
+// allow real alternative engines there, but neither rule reaches India, so
+// for this app's actual users "Chrome on iPhone" IS Safari's engine wearing
+// a different UI. Blocking it by UA alone would add friction for zero
+// security gain, so iOS only needs to look like a mobile WebKit browser at
+// all. On Android, browsers built on Chromium (Samsung Internet, Edge,
+// Opera, Brave) genuinely differ enough to still exclude by UA.
 function isAllowedBrowser(userAgent) {
   const ua = String(userAgent || '');
   if (/iPhone|iPad|iPod/.test(ua)) {
-    return /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+    return /Safari/.test(ua);
   }
   return /Chrome/.test(ua) && !/SamsungBrowser|Edg\/|OPR\/|Firefox|UCBrowser|MiuiBrowser/.test(ua);
 }
@@ -199,7 +202,7 @@ router.post('/mark', requireAuth('student'), markLimiter, async (req, res) => {
     // same as the format/roster bypass — it's a test account run from
     // whatever browser is convenient.
     if (!isAdmin && !isAllowedBrowser(req.headers['user-agent'])) {
-      return res.status(403).json({ error: 'Please use Chrome (Android) or Safari (iPhone) to mark attendance.' });
+      return res.status(403).json({ error: 'Please use Chrome to mark attendance (any browser is fine on iPhone).' });
     }
 
     const normalizedRoll = rollNo.trim().toUpperCase();

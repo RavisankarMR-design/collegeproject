@@ -56,17 +56,19 @@
 
     // Client-side heads-up only — a matching check on the server (see
     // routes/attendance.js isAllowedBrowser) is what actually enforces this.
-    // Same UA parsing on both sides: real Safari on iOS (not Chrome/Firefox/
-    // Edge wearing Safari's UA), real Chrome on Android (not Samsung
-    // Internet/Edge/Opera/etc, which also say "Chrome").
+    // Every iOS browser runs Safari's WebKit engine underneath (Apple's
+    // rule; India isn't covered by the EU/UK exceptions to it), so any of
+    // them is fine there. On Android, only real Chrome is allowed — Samsung
+    // Internet/Edge/Opera/etc also say "Chrome" in their UA but differ
+    // enough to exclude.
     function isAllowedBrowser() {
       const ua = navigator.userAgent;
-      if (/iPhone|iPad|iPod/.test(ua)) return /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+      if (/iPhone|iPad|iPod/.test(ua)) return /Safari/.test(ua);
       return /Chrome/.test(ua) && !/SamsungBrowser|Edg\/|OPR\/|Firefox|UCBrowser|MiuiBrowser/.test(ua);
     }
     if (auth && auth.role !== 'admin' && !isAllowedBrowser()) {
       document.querySelector('.card').innerHTML =
-        '<p class="msg err">Please open this page in Chrome (Android) or Safari (iPhone) to mark attendance.</p>';
+        '<p class="msg err">Please use Chrome to mark attendance (any browser is fine on iPhone).</p>';
     }
 
     // Device id = hash(browser/hardware fingerprint + a random per-install id).
