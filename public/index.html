@@ -44,11 +44,23 @@
       status.textContent = 'Signing in...';
 
       try {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
+        // On slow mobile data this would otherwise hang with the "Signing
+        // in..." message stuck forever and no way to tell what's wrong.
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 20000);
+        let res;
+        try {
+          res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+        } catch (err) {
+          throw new Error(err.name === 'AbortError' ? 'Network is too slow right now — check your connection and try again.' : 'Could not reach the server — check your connection and try again.');
+        } finally {
+          clearTimeout(timer);
+        }
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Sign-in failed');
 

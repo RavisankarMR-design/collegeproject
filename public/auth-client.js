@@ -33,14 +33,29 @@ function requireSignedIn() {
   return auth;
 }
 
-// fetch() wrapper that attaches the bearer token and sends the caller back
-// to index.html on a 401 (expired/invalid session) instead of failing silently.
-async function authFetch(url, options = {}) {
+// fetch() wrapper that attaches the bearer token, sends the caller back to
+// index.html on a 401 (expired/invalid session), and — on real mobile data,
+// not just a fast campus/office connection — gives up after 20s instead of
+// leaving a "Scanning..." spinner stuck forever with no explanation.
+async function authFetch(url, options = {}, timeoutMs = 20000) {
   const auth = getAuth();
   const headers = { ...(options.headers || {}) };
   if (auth) headers.Authorization = `Bearer ${auth.token}`;
 
-  const res = await fetch(url, { ...options, headers });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(url, { ...options, headers, signal: controller.signal });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Network is too slow right now — check your connection and try again.');
+    }
+    throw new Error('Could not reach the server — check your connection and try again.');
+  } finally {
+    clearTimeout(timer);
+  }
+
   if (res.status === 401) {
     localStorage.removeItem(AUTH_KEY);
     location.href = 'index.html';
