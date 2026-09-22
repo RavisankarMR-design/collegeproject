@@ -60,41 +60,9 @@ async function flag(io, session, { rollNo, name, deviceId, email }, reason, deta
   }
 }
 
-// Neither of these ever blocks the scan or changes the response — they're a
-// heuristic nudge logged for the teacher to eyeball (via the existing
-// flagged-attempts list), not proof of cheating. False positives here are
-// expected and cheap; a false REJECTION would not be.
-
-// One person walking in with two already-registered phones (their own +
-// an absent friend's) passes geofence and device-binding cleanly — both
-// phones are genuinely inside the room. The one shared signal that setup
-// still leaves behind: the two scans land within a couple meters and
-// seconds of each other, session after session. It also catches a ring of
-// scripted clients all reporting the same made-up coordinates.
-async function checkPassAlong(io, session, record, student, lat, lng, deviceId) {
-  try {
-    const since = new Date(record.markedAt.getTime() - 90_000);
-    const nearby = await Attendance.find({
-      session: session._id,
-      _id: { $ne: record._id },
-      markedAt: { $gte: since },
-      lat: { $ne: null },
-      lng: { $ne: null },
-    }).populate('student', 'rollNo name');
-
-    for (const other of nearby) {
-      if (!other.student || other.deviceId === deviceId) continue;
-      const gap = distanceMeters(lat, lng, other.lat, other.lng);
-      if (gap <= 3) {
-        const seconds = Math.round(Math.abs(record.markedAt - other.markedAt) / 1000);
-        const detail = `Within ~${Math.round(gap)}m and ${seconds}s of roll "${other.student.rollNo}" — possibly one person carrying two phones.`;
-        await flag(io, session, { rollNo: student.rollNo, name: student.name, deviceId, email: `${student.email}|${other.student.rollNo}` }, 'possible_proxy_pattern', detail, null, null);
-      }
-    }
-  } catch {
-    // best-effort heuristic only
-  }
-}
+// Never blocks the scan or changes the response — a heuristic nudge logged
+// for the teacher to eyeball (via the existing flagged-attempts list), not
+// proof of cheating.
 
 function isPrivateIp(ip) {
   const v4 = String(ip || '').replace('::ffff:', '');
@@ -412,9 +380,8 @@ router.post('/mark', requireAuth('student'), markLimiter, async (req, res) => {
         markedAt: record.markedAt,
       });
 
-      // Fire-and-forget — heuristics, must never delay or affect this response.
+      // Fire-and-forget — heuristic, must never delay or affect this response.
       if (!isAdmin) {
-        checkPassAlong(io, session, record, student, lat, lng, deviceId);
         checkIpMismatch(io, session, record, student, deviceId, clientIp(req));
       }
 

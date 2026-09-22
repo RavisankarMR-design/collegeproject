@@ -158,14 +158,6 @@ t('qr: ended session rejects scans (410)', async () => {
   eq(await api('POST', `/api/sessions/${s.id}/end`, { token: staff1 }), 200);
   eq(await api('POST', '/api/attendance/mark', { token: st.token, body: { payload: q.payload, rollNo: st.roll, lat: LAT, lng: LNG, accuracy: 8, deviceId: st.device } }), 410);
 });
-t('qr: same live QR shared to two phones at the same spot -> possible_proxy_pattern flag', async () => {
-  const a = await newStudent(); const b = await newStudent(); const s = await mkSession(staff1);
-  eq(await mark(a, s), 201); eq(await mark(b, s), 201);
-  await sleep(800);
-  const f = await flags(s);
-  assert.ok(f.some((x) => x.reason === 'possible_proxy_pattern'), 'expected possible_proxy_pattern flag');
-});
-
 // ---------- 4-DIGIT CODE ----------
 t('code: live 4-digit code marks present', async () => {
   const st = await newStudent(); const s = await mkSession(staff1);
@@ -375,19 +367,11 @@ t('device: many resets and many unbound accounts never trip the unique index (no
   const admin2 = await login('mrravisankar7@gmail.com'); void admin2;
   const adm = await mkSession(admin); eq(await api('POST', '/api/attendance/mark', { token: admin, body: { payload: (await live(adm)).payload, rollNo: 'x', lat: LAT, lng: LNG, accuracy: 8, deviceId: 'adm-dev' } }), 201);
 });
-t('qr: a ring of scripted clients all reporting identical made-up coordinates gets flagged', async () => {
-  const s = await mkSession(staff1); const ring = [];
-  for (let i = 0; i < 3; i++) ring.push(await newStudent());
-  for (const st of ring) eq(await mark(st, s, { lat: LAT + 0.00001, lng: LNG + 0.00001, accuracy: 3 }), 201);
-  await sleep(800);
-  const n = (await flags(s)).filter((f) => f.reason === 'possible_proxy_pattern').length;
-  assert.ok(n >= 2, `expected the ring to be flagged, got ${n}`);
-});
 t('KNOWN LIMIT: a scripted client can invent a fresh deviceId per account (no server-side hardware proof)', async () => {
   const a = await newStudent(); const b = await newStudent(); // same "phone", two invented ids
   const s = await mkSession(staff1);
   const ra = await mark(a, s, { deviceId: 'invented-1' }); const rb = await mark(b, s, { deviceId: 'invented-2' });
-  console.log(`      (informational) same-phone/two-accounts via scripted deviceIds -> ${ra.status}/${rb.status}; caught only by the same-spot heuristic`);
+  console.log(`      (informational) same-phone/two-accounts via scripted deviceIds -> ${ra.status}/${rb.status}; not caught by anything (proximity heuristic removed, see README)`);
 }, { info: true });
 
 // ---------- SESSION DATA GATING ----------

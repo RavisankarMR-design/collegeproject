@@ -56,10 +56,9 @@
       not_enrolled: 'Not enrolled',
       identity_mismatch: 'Identity mismatch',
       roll_number_changed: 'Roll number corrected',
-      possible_proxy_pattern: 'Possible pass-along (unconfirmed)',
       ip_location_mismatch: 'IP/GPS mismatch (unconfirmed)',
     };
-    const infoReasons = new Set(['possible_proxy_pattern', 'ip_location_mismatch']);
+    const infoReasons = new Set(['ip_location_mismatch']);
 
     function esc(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (

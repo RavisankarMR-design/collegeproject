@@ -113,20 +113,29 @@ rigor:
 - **Device binding is client-side.** The device id is a hash of a browser
   fingerprint plus a random per-install id, and the server trusts what the
   client sends. It stops the normal cases (one phone, several accounts; an
-  account used from a second phone once it has scanned on its first), but a
-  determined person scripting the API can invent device ids. The
-  same-place-same-time heuristic (`possible_proxy_pattern`) is the backstop.
-  Clearing all site data / a private window gives a new install id, which only
-  ever locks the student's own account until staff press "Reset device".
-  **Have everyone scan once on their own phone before the first real class**,
-  so accounts are bound before anyone else could squat them.
+  account used from a second phone once it has scanned on its first), and the
+  allowed-browser check (Chrome on Android; Safari/Chrome on iPhone) caps how
+  many separate apps one phone could switch between — but a determined person
+  scripting the API can still invent device ids, and nothing catches two
+  *genuinely different* phones controlled by one person in real time. A
+  same-place-same-time proximity heuristic was tried and removed: tested
+  against a simulated 100-student class, it false-flagged ~192 completely
+  unrelated student pairs (4% of all possible pairs) as "possibly one person,
+  two phones" — real indoor GPS noise (8-40m) is larger than both the
+  cheating case and the innocent-coincidence case, so distance-based
+  proximity can't tell them apart at any threshold. Removed rather than kept
+  as noise nobody would trust. Clearing all site data / a private window
+  gives a new install id, which only ever locks the student's own account
+  until staff press "Reset device". **Have everyone scan once on their own
+  phone before the first real class**, so accounts are bound before anyone
+  else could squat them.
 - **The location is reported by the phone.** A spoofed GPS app / DevTools can
   claim to be in the room. Mitigations: rotating QR (10s window, 20s grace),
-  a geofence whose accuracy margin is capped at the radius, the shared-location
-  heuristic, and an optional IP-geolocation check (`IP_GEOLOOKUP=1`, off by
-  default — it sends IPs to a third party over plain HTTP, so update
-  `privacy.html` before enabling). None of this beats a friend in the room
-  relaying the live QR/code to someone standing just outside.
+  a geofence whose accuracy margin is capped at the radius, and an optional
+  IP-geolocation check (`IP_GEOLOOKUP=1`, off by default — it sends IPs to a
+  third party over plain HTTP, so update `privacy.html` before enabling).
+  None of this beats a friend in the room relaying the live QR/code to
+  someone standing just outside.
 - **The 4-digit code has only 10,000 values.** Wrong guesses lock the account
   out (6 in 10 minutes); the QR path is unaffected.
 - **Public GitHub repo.** No secrets are committed (`.env` is gitignored), but

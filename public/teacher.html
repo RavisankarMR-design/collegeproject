@@ -197,13 +197,12 @@
       not_enrolled: 'Not enrolled',
       identity_mismatch: 'Identity mismatch',
       roll_number_changed: 'Roll number corrected',
-      possible_proxy_pattern: 'Possible pass-along (unconfirmed)',
       ip_location_mismatch: 'IP/GPS mismatch (unconfirmed)',
     };
-    // These two are heuristic nudges, not rejections — the scan was still
-    // accepted. Styled as a soft warning instead of the red "rejected" badge
-    // so they don't read as proven cheating.
-    const infoReasons = new Set(['possible_proxy_pattern', 'ip_location_mismatch']);
+    // A heuristic nudge, not a rejection — the scan was still accepted.
+    // Styled as a soft warning instead of the red "rejected" badge so it
+    // doesn't read as proven cheating.
+    const infoReasons = new Set(['ip_location_mismatch']);
 
     // Roll numbers and names are student-supplied and rendered via innerHTML,
     // so they have to be escaped or a crafted name runs script in this panel.

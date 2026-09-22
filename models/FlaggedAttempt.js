@@ -12,10 +12,10 @@ const FlaggedAttemptSchema = new mongoose.Schema({
     type: String,
     enum: [
       'outside_geofence', 'device_mismatch', 'not_enrolled', 'identity_mismatch', 'roll_number_changed',
-      // Informational only — these two never block the scan, the attendance
-      // record is still created. They're a heuristic nudge for the teacher
-      // to eyeball, not proof of cheating (see routes/attendance.js).
-      'possible_proxy_pattern', 'ip_location_mismatch',
+      // Informational only — never blocks the scan, the attendance record is
+      // still created. A heuristic nudge for the teacher to eyeball, not
+      // proof of cheating (see routes/attendance.js checkIpMismatch).
+      'ip_location_mismatch',
     ],
     required: true,
   },
