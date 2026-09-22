@@ -294,11 +294,14 @@
       document.getElementById('live').style.display = 'block';
 
       refreshQR();
-      setInterval(refreshQR, 1000);
+      setInterval(renderCountdown, 200); // local tick only, no network - see refreshQR
+      // Sockets push present/flagged updates instantly (see socket.on below);
+      // this is a pure safety net for a dropped connection, so it doesn't
+      // need to run every 3s.
       refreshList();
-      setInterval(refreshList, 3000);
+      setInterval(refreshList, 10000);
       refreshFlagged();
-      setInterval(refreshFlagged, 3000);
+      setInterval(refreshFlagged, 10000);
       setInterval(renderEndTimeBadge, 1000);
     }
 
@@ -427,19 +430,41 @@
       location.reload();
     };
 
+    // The QR only actually rotates once every windowSeconds (10s) — polling
+    // the server every second was just to animate the countdown ring, which
+    // doesn't need a network round-trip at all. renderCountdown ticks that
+    // locally off the wall clock; refreshQR only hits the server once per
+    // real rotation (called once up front, then again whenever the local
+    // countdown hits zero), cutting this endpoint's traffic ~10x.
+    let qrData = null;
+    let qrFetchedAt = 0;
+    let qrRefreshing = false;
+
     async function refreshQR() {
-      const res = await fetch(`/api/sessions/${sessionId}/current-qr?code=${displayCode}`);
-      const data = await res.json();
-      if (!res.ok) { document.getElementById('timer').textContent = '—'; return; }
+      if (qrRefreshing) return;
+      qrRefreshing = true;
+      try {
+        const res = await fetch(`/api/sessions/${sessionId}/current-qr?code=${displayCode}`);
+        const data = await res.json();
+        if (!res.ok) { document.getElementById('timer').textContent = '—'; return; }
+        qrData = data;
+        qrFetchedAt = Date.now();
 
-      const canvas = document.getElementById('qr-canvas');
-      QRCode.toCanvas(canvas, data.payload, { width: 220 });
-      document.getElementById('live-code-fallback').textContent = data.shortCode || '';
+        const canvas = document.getElementById('qr-canvas');
+        QRCode.toCanvas(canvas, data.payload, { width: 220 });
+        document.getElementById('live-code-fallback').textContent = data.shortCode || '';
+        renderCountdown();
+      } finally {
+        qrRefreshing = false;
+      }
+    }
 
-      const secondsLeft = Math.ceil(data.msLeftInWindow / 1000);
-      document.getElementById('timer').textContent = secondsLeft + 's';
-      const pct = Math.round((data.msLeftInWindow / (windowSeconds * 1000)) * 100);
-      document.getElementById('timer-ring').style.setProperty('--pct', pct);
+    function renderCountdown() {
+      if (!qrData) return;
+      const remainingMs = Math.max(0, qrData.msLeftInWindow - (Date.now() - qrFetchedAt));
+      document.getElementById('timer').textContent = Math.ceil(remainingMs / 1000) + 's';
+      document.getElementById('timer-ring').style.setProperty('--pct', Math.round((remainingMs / (windowSeconds * 1000)) * 100));
+      if (remainingMs <= 150) refreshQR(); // window just closed - fetch the new one
     }
 
     async function refreshList() {
