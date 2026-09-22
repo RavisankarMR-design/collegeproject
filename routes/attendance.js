@@ -136,6 +136,20 @@ async function checkIpMismatch(io, session, record, student, deviceId, ip) {
 // ever needs a much larger legitimate radius (e.g. an outdoor field).
 const MAX_ACCEPTABLE_ACCURACY_METERS = 100;
 
+// Real Chrome-on-Android or real Safari-on-iOS only. On iOS every browser
+// (Chrome, Firefox, Edge) is required by Apple to use Safari's WebKit engine
+// and still reports "Safari" in its UA, so they're told apart by their own
+// extra token (CriOS/FxiOS/EdgiOS/OPiOS). On Android, browsers built on
+// Chromium (Samsung Internet, Edge, Opera, Brave) also include "Chrome" in
+// their UA, so those are excluded the same way.
+function isAllowedBrowser(userAgent) {
+  const ua = String(userAgent || '');
+  if (/iPhone|iPad|iPod/.test(ua)) {
+    return /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+  }
+  return /Chrome/.test(ua) && !/SamsungBrowser|Edg\/|OPR\/|Firefox|UCBrowser|MiuiBrowser/.test(ua);
+}
+
 const router = express.Router();
 
 // Bounds abuse of the mark endpoint. Keyed per signed-in user, not per IP: a
@@ -177,6 +191,15 @@ router.post('/mark', requireAuth('student'), markLimiter, async (req, res) => {
     if (accuracy != null && (!isNum(accuracy) || accuracy < 0)) return bad('Invalid location accuracy.');
     if (accuracy != null && accuracy > MAX_ACCEPTABLE_ACCURACY_METERS) {
       return bad(`Your location isn't precise enough right now (~${Math.round(accuracy)}m accuracy). Move near a window or wait a few seconds for GPS to lock, then rescan.`);
+    }
+    // ponytail: User-Agent is client-reported and trivially spoofed by anyone
+    // who opens devtools — this stops "just open a different browser app to
+    // get a fresh device id" (the common, low-effort version of that trick),
+    // not a deliberate attacker willing to edit headers. Admin is exempt,
+    // same as the format/roster bypass — it's a test account run from
+    // whatever browser is convenient.
+    if (!isAdmin && !isAllowedBrowser(req.headers['user-agent'])) {
+      return res.status(403).json({ error: 'Please use Chrome (Android) or Safari (iPhone) to mark attendance.' });
     }
 
     const normalizedRoll = rollNo.trim().toUpperCase();

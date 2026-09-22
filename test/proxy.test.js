@@ -16,8 +16,13 @@ const north = (m) => LAT + m / 111320;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Simulates a real student phone (Chrome/Android) by default, since the
+// server now rejects other browsers on /mark — tests that need to exercise
+// that check pass their own User-Agent via `headers`.
+const REAL_DEVICE_UA = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+
 async function api(method, url, { token, body, raw, headers: extra } = {}) {
-  const headers = { ...(extra || {}) };
+  const headers = { 'User-Agent': REAL_DEVICE_UA, ...(extra || {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
   let data;
   if (raw !== undefined) { headers['Content-Type'] = 'application/json'; data = raw; }
@@ -49,12 +54,13 @@ const live = async (s) => (await api('GET', `/api/sessions/${s.id}/current-qr?co
 
 // Marks with sensible defaults; `over` overrides any field (use undefined to drop one).
 async function mark(st, s, over = {}) {
+  const { headers, ...rest } = over;
   const base = { rollNo: st.roll, lat: LAT, lng: LNG, accuracy: 8, deviceId: st.device };
   const q = await live(s);
-  if (over.useCode) base.code = q.shortCode; else base.payload = q.payload;
-  const body = { ...base, ...over }; delete body.useCode;
+  if (rest.useCode) base.code = q.shortCode; else base.payload = q.payload;
+  const body = { ...base, ...rest }; delete body.useCode;
   for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
-  return api('POST', '/api/attendance/mark', { token: st.token, body });
+  return api('POST', '/api/attendance/mark', { token: st.token, body, headers });
 }
 const flags = async (s) => (await api('GET', `/api/sessions/${s.id}/flagged?code=${s.code}`)).body;
 
@@ -655,6 +661,33 @@ t('headers: basic hardening headers are set', async () => {
   assert.strictEqual(res.headers.get('x-content-type-options'), 'nosniff');
   assert.ok(res.headers.get('x-frame-options'));
   assert.ok(!res.headers.get('x-powered-by'), 'x-powered-by advertises the framework');
+});
+t('browser: only real Chrome-Android or Safari-iOS can mark, everything else is rejected', async () => {
+  const s = await mkSession(await login('bhuvaneswaran@rajalakshmi.edu.in'));
+  const allowed = {
+    'Chrome/Android': REAL_DEVICE_UA,
+    'Safari/iOS': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  };
+  const blocked = {
+    'Chrome-on-iOS (CriOS, still WebKit but not Safari\'s own UA)': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.0.0 Mobile/15E148 Safari/604.1',
+    'Firefox/Android': 'Mozilla/5.0 (Android 13; Mobile; rv:120.0) Gecko/120.0 Firefox/120.0',
+    'Samsung Internet (says "Chrome" too)': 'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.36',
+    'no UA at all': '',
+  };
+  for (const [label, ua] of Object.entries(allowed)) {
+    const st = await newStudent('ba');
+    const r = await mark(st, s, { headers: { 'User-Agent': ua } });
+    assert.strictEqual(r.status, 201, `${label} should be allowed: ${r.text}`);
+  }
+  for (const [label, ua] of Object.entries(blocked)) {
+    const st = await newStudent('bb');
+    const r = await mark(st, s, { headers: { 'User-Agent': ua } });
+    assert.strictEqual(r.status, 403, `${label} should be blocked: ${r.text}`);
+  }
+  // Admin is exempt, same as the roster/format bypass.
+  const admin = { email: 'mrravisankar7@gmail.com', token: await login('mrravisankar7@gmail.com'), roll: 'ADMIN-UA-TEST', device: `dev-${RUN}-admin-ua` };
+  const adminR = await mark(admin, s, { headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0' } });
+  assert.strictEqual(adminR.status, 201, `admin should bypass the browser check: ${adminR.text}`);
 });
 
 // ---------- runner ----------
