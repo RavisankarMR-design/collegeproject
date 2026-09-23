@@ -5,6 +5,12 @@
 const READER_ID = 'reader';
 const DUPLICATE_COOLDOWN_MS = 1500; // ignore the same code re-firing while still in frame
 const STORAGE_KEY = 'rollcall_state_v1';
+// Roll numbers are always "240" + 6 digits (e.g. 240701424) — the prefix is
+// fixed, the 6 digits vary per department/year/student. Only enforced on
+// manual/edited entries: a real scanned barcode is trusted as-is, since
+// forcing this pattern on it could reject a genuine card over a benign
+// encoding difference.
+const ROLL_NO_RE = /^240\d{6}$/;
 
 let scanner = null;
 let scanning = false;
@@ -99,7 +105,10 @@ function renderList() {
               <span class="roll">${escapeHtml(r.rollNo)}</span><br/>
               <span class="time">${r.scannedAt.toLocaleTimeString()}</span>
             </span>
-            <button class="remove" data-index="${realIndex}" title="Remove">✕</button>
+            <span style="display:flex; flex-shrink:0;">
+              <button class="remove" data-action="edit" data-index="${realIndex}" title="Edit">✏️</button>
+              <button class="remove" data-action="remove" data-index="${realIndex}" title="Remove">✕</button>
+            </span>
           </li>`;
       })
       .join('');
@@ -120,11 +129,46 @@ els.list.addEventListener('click', (e) => {
   const btn = e.target.closest('button.remove');
   if (!btn) return;
   const idx = Number(btn.dataset.index);
+
+  if (btn.dataset.action === 'edit') {
+    editEntry(idx);
+    return;
+  }
+
   const removed = rows.splice(idx, 1)[0];
   if (removed) seenRollNos.delete(removed.rollNo);
   saveState();
   renderList();
 });
+
+// For fixing a barcode that scanned/decoded wrong — a mistyped manual entry
+// is just as easily removed and retyped, but a scan is trusted as correct
+// by default, so there was previously no way to correct one without
+// deleting and re-scanning the same card again.
+function editEntry(idx) {
+  const row = rows[idx];
+  if (!row) return;
+
+  const next = prompt('Edit roll number:', row.rollNo);
+  if (next === null) return; // cancelled
+  const rollNo = next.trim();
+  if (!rollNo || rollNo === row.rollNo) return;
+
+  if (!ROLL_NO_RE.test(rollNo)) {
+    alert('Roll number must be 240 followed by 6 digits (e.g. 240701424).');
+    return;
+  }
+  if (seenRollNos.has(rollNo)) {
+    alert(`${rollNo} is already in the list.`);
+    return;
+  }
+
+  seenRollNos.delete(row.rollNo);
+  seenRollNos.add(rollNo);
+  row.rollNo = rollNo;
+  saveState();
+  renderList();
+}
 
 function onDecoded(decodedText) {
   const rollNo = String(decodedText).trim();
@@ -263,6 +307,10 @@ async function stopScanning() {
 function addManualEntry() {
   const rollNo = els.manualInput.value.trim();
   if (!rollNo) return;
+  if (!ROLL_NO_RE.test(rollNo)) {
+    setStatus('Roll number must be 240 followed by 6 digits (e.g. 240701424).', 'err');
+    return;
+  }
   onDecoded(rollNo); // same dedupe/persistence/beep path as a real scan
   els.manualInput.value = '';
   els.manualInput.focus();
