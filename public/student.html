@@ -38,7 +38,16 @@
   <p class="footer-note">Protected by rotating token + GPS geofence + device binding</p>
 
   <script>
-    const auth = requireSignedIn();
+    // A QR scanned straight from the phone's own camera app (not opened
+    // inside this page first) lands here as .../student.html?p=<payload> —
+    // see routes/sessions.js current-qr. If nobody's signed in yet, carry
+    // that payload through the login round-trip instead of losing it.
+    const qrPayload = new URLSearchParams(location.search).get('p');
+    const auth = getAuth();
+    if (!auth) {
+      const next = qrPayload ? `student.html?p=${encodeURIComponent(qrPayload)}` : 'student.html';
+      location.href = `index.html?next=${encodeURIComponent(next)}`;
+    }
     if (auth) {
       const adminLinks = auth.role === 'admin'
         ? ' · <a href="teacher.html" style="color:var(--accent);">Teacher page</a> · <a href="history.html" style="color:var(--accent);">History</a>'
@@ -152,7 +161,7 @@
           await scanner.stop();
           scanner.clear();
           document.getElementById('reader-frame').style.display = 'none';
-          handleScan({ payload: decodedText });
+          handleScan({ payload: extractPayload(decodedText) });
         },
         () => {} // ignore per-frame scan failures
       ).catch((err) => {
@@ -161,6 +170,19 @@
         setBusy(false);
       });
     };
+
+    // The QR now encodes a full student.html?p=<payload> URL (so a phone's
+    // stock camera app can open it directly). The in-app camera scanner
+    // decodes that same URL, so pull the payload back out of it here;
+    // falls back to treating the text as a raw payload for older QR images.
+    function extractPayload(text) {
+      try {
+        const url = new URL(text);
+        const p = url.searchParams.get('p');
+        if (p) return p;
+      } catch {}
+      return text;
+    }
 
     function showMsg(text, ok) {
       const div = document.getElementById('result');
@@ -213,6 +235,16 @@
           showMsg(msg, false);
           setBusy(false);
         });
+    }
+
+    // Auto-mark on arrival from a camera-app scan (?p=...) — signed in
+    // already, so there's nothing left for the student to tap. Clears the
+    // param from the address bar right away so a refresh/back doesn't
+    // resubmit the same (likely now-expired) QR window.
+    if (auth && qrPayload && (auth.role === 'admin' || isAllowedBrowser())) {
+      history.replaceState(null, '', 'student.html');
+      busyBtnId = 'scan-btn';
+      handleScan({ payload: qrPayload });
     }
   </script>
 </body>

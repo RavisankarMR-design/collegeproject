@@ -455,7 +455,10 @@
         qrFetchedAt = Date.now();
 
         const canvas = document.getElementById('qr-canvas');
-        QRCode.toCanvas(canvas, data.payload, { width: 220 });
+        // Encodes the full scan-page URL (not the bare payload) so a
+        // student's stock camera app recognizes it as a link and offers to
+        // open it directly — no need to have visited the site beforehand.
+        QRCode.toCanvas(canvas, data.url, { width: 220 });
         document.getElementById('live-code-fallback').textContent = data.shortCode || '';
         renderCountdown();
       } finally {

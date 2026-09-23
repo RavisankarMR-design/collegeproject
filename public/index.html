@@ -30,7 +30,17 @@
   </div>
 
   <script>
+    // Only ever hands back a same-page relative link we ourselves generated
+    // (student.html?p=...) — never an arbitrary external URL — so a crafted
+    // ?next= can't be used to redirect a freshly-authenticated student off-site.
+    function safeNext() {
+      const next = new URLSearchParams(location.search).get('next');
+      return next && next.startsWith('student.html') ? next : null;
+    }
+
     function redirectByRole(role) {
+      const next = safeNext();
+      if (next && role !== 'staff' && role !== 'admin') { location.href = next; return; }
       location.href = (role === 'staff' || role === 'admin') ? 'teacher.html' : 'student.html';
     }
 

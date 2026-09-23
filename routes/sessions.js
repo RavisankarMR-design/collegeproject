@@ -200,11 +200,17 @@ router.get('/:id/current-qr', async (req, res) => {
     const windowIndex = currentWindow(session.windowSeconds);
     const token = generateToken(session.secret, session._id, windowIndex);
     const payload = `${session._id}|${windowIndex}|${token}`;
+    // A phone's own camera app only offers to "open" a QR code if it decodes
+    // to a URL — a bare pipe-separated string just gets shown as text. This
+    // lets a student scan with the stock camera app (no need to have ever
+    // opened/bookmarked the site first) and land straight on the scan page
+    // with the session already selected.
+    const url = `${req.protocol}://${req.get('host')}/student.html?p=${encodeURIComponent(payload)}`;
 
     const msIntoWindow = Date.now() % (session.windowSeconds * 1000);
     const msLeftInWindow = session.windowSeconds * 1000 - msIntoWindow;
 
-    res.json({ payload, msLeftInWindow, shortCode: shortCode(token), displayCode: session.displayCode });
+    res.json({ payload, url, msLeftInWindow, shortCode: shortCode(token), displayCode: session.displayCode });
   } catch (err) {
     serverError(res, err);
   }
