@@ -116,5 +116,59 @@ Combine + modify the above into our own version:
 
 ## Status
 
-Requirements gathering + research complete. **No code written yet for this
-project** — awaiting go-ahead to start the build.
+**Built.** Files:
+- `index.html` — the page (scan area, live list, export/clear buttons)
+- `app.js` — continuous-scan handling, dedupe, list rendering, Excel export
+- `style.css` — mobile-first dark UI
+- `manifest.json` + `sw.js` — PWA installability + offline caching
+- `icons/` — generated app icons (192/512/apple-touch)
+- `vendor/html5-qrcode.min.js`, `vendor/xlsx.full.min.js` — vendored
+  locally (not CDN), so the app needs internet only for its very first
+  page load; every load after that (including the actual scanning and
+  Excel export) works with zero internet.
+
+### How it works
+
+- Tap **Start scanning** once (grants camera permission). The scanner then
+  stays active — it does not stop after a successful decode, unlike the
+  original free app.
+- Each new barcode's decoded text (the roll number) is added to the list
+  instantly, with a beep/vibration. Scanning the same card again is
+  recognized and ignored (counted under "Repeats ignored"), not added
+  twice.
+- A misread entry can be removed individually via the ✕ button.
+- **Export to Excel** generates a `.xlsx` file (Roll No + Scanned At
+  columns) client-side and downloads it — no server involved.
+- **Clear list** wipes the session (asks for confirmation first).
+
+### Verified (this session, headless Chromium + a fake camera device)
+
+- Page loads with zero console/JS errors; `Html5Qrcode` and `XLSX` both
+  load correctly from the local `vendor/` copies (no CDN dependency).
+- Simulated scans confirm: new roll numbers add to the list, a repeat is
+  correctly caught and counted separately, row removal works.
+- Exported `.xlsx` opened and inspected directly (it's a real ZIP/OOXML
+  file) — confirmed the scanned roll numbers are actually inside the
+  sheet data, not just a correctly-named empty file.
+- Reloaded the page with the network fully disabled (after one prior
+  load) — page still loads and runs completely, confirming the
+  offline-after-first-load behavior actually works, not just in theory.
+- **Not yet verified**: a real barcode decode from an actual camera aimed
+  at a real ID card, and installing/running it as a home-screen PWA on
+  real Android/iPhone hardware — this sandbox has no camera, so that step
+  is on a real phone next.
+
+### To test on a phone
+
+1. Serve this folder over your local network (anything that serves static
+   files works, e.g. `python3 -m http.server 8099` from inside
+   `project-3-barcode-scanner/`) or deploy it anywhere static hosting is
+   free (GitHub Pages, Netlify, etc.) — one-time, needs internet for the
+   very first load only.
+2. Open the page on the phone once, tap Start scanning to confirm camera
+   permission works, and let the service worker cache finish (a couple
+   of seconds).
+3. Optionally "Add to Home Screen" (Android Chrome) / "Add to Home Screen"
+   (iPhone Safari share sheet) to install it as an app icon.
+4. Turn on airplane mode / hotspot-only and confirm it still opens and
+   scans — that's the real offline test this sandbox couldn't run.

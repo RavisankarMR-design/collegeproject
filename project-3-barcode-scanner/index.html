@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>ID Barcode Roll Call</title>
+<meta name="description" content="Scan student ID barcodes continuously and export the roll list to Excel. Works fully offline." />
+<meta name="theme-color" content="#2563eb" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<link rel="icon" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Roll Call" />
+<link rel="stylesheet" href="style.css" />
+<script src="vendor/html5-qrcode.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+</head>
+<body>
+  <h1>ID Barcode Roll Call</h1>
+  <p class="subtitle">Scan each student's ID card barcode. It keeps scanning — the list builds itself. Export to Excel when done. Works fully offline once loaded.</p>
+
+  <div class="card">
+    <div id="reader"></div>
+    <div class="row">
+      <button id="start-btn" class="primary">📷 Start scanning</button>
+      <button id="stop-btn" class="secondary" style="display:none;">⏹ Stop</button>
+    </div>
+    <div id="scan-status" class="status"></div>
+  </div>
+
+  <div class="card">
+    <div class="stat-row">
+      <div class="stat">
+        <div class="num" id="count">0</div>
+        <div class="label">Scanned</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="dupe-count">0</div>
+        <div class="label">Repeats ignored</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="margin-bottom:10px;">
+      <h2 style="margin:0; flex:1;">Roll list</h2>
+    </div>
+    <ul id="roll-list" class="list"><li class="empty">No scans yet.</li></ul>
+  </div>
+
+  <div class="card">
+    <button id="export-btn" class="primary" disabled>⬇ Export to Excel (.xlsx)</button>
+    <button id="clear-btn" class="danger" disabled>🗑 Clear list</button>
+  </div>
+
+  <p class="footer-note">Independent tool — not connected to the attendance web app. Nothing leaves this device; the list only exists in this browser tab until you export it.</p>
+
+  <script src="app.js"></script>
+</body>
+</html>
