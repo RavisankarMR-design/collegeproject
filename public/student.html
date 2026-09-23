@@ -22,9 +22,6 @@
       <div id="reader"></div>
     </div>
 
-    <label for="qr-file" style="margin-top:14px;">No camera? Upload a photo/screenshot of the QR instead</label>
-    <input type="file" id="qr-file" accept="image/*" />
-
     <p class="footer-note" style="margin-top:10px;">
       <a href="#" id="code-toggle-link" style="color:var(--accent);">Can't scan the QR? Enter the code instead</a>
     </p>
@@ -163,24 +160,6 @@
         showMsg('Could not access camera: ' + (err && err.message ? err.message : err), false);
         setBusy(false);
       });
-    };
-
-    document.getElementById('qr-file').onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      busyBtnId = 'scan-btn';
-      setBusy(true, 'Reading QR image...');
-      document.getElementById('result').innerHTML = '';
-      const fileScanner = new Html5Qrcode('reader');
-      try {
-        const decodedText = await fileScanner.scanFile(file, false);
-        handleScan({ payload: decodedText });
-      } catch (err) {
-        showMsg('Could not read a QR code from that image: ' + (err && err.message ? err.message : err), false);
-        setBusy(false);
-      }
-      e.target.value = '';
     };
 
     function showMsg(text, ok) {
