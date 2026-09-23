@@ -31,18 +31,16 @@ function shortCode(token) {
   return String(parseInt(token.slice(0, 8), 16) % 10000).padStart(4, '0');
 }
 
-// A scan that arrives while the student isn't signed in yet has to survive a
-// full Google-login round trip (consent screen, account picker) before it
-// reaches the server — commonly 20-40s on a first-ever login. A 1-window
-// (~20s) grace made that fail almost every time, forcing a second scan. 50s
-// covers a slow first login while still expiring well short of "screenshot
-// texted to a friend a few minutes later."
-const TOKEN_STALE_MS = 50_000;
-
 /**
- * Verifies a scanned token against the current window and a grace period
- * behind it — covering both simple network/clock jitter and a first-time
- * login round-trip that delayed the scan reaching the server.
+ * Verifies a scanned token against the current window and the previous one
+ * (a small grace period so a scan that lands right at a 10s boundary, or that
+ * takes a couple of seconds to reach the server, isn't unfairly rejected).
+ *
+ * Deliberately tight (~10-20s total, on top of the 10s rotation itself) —
+ * a first-time login (Google consent screen) can occasionally outlast this
+ * and need a second scan. That's an accepted trade-off: a wider grace here
+ * directly extends how long a screenshotted/relayed QR stays usable, which
+ * matters more for anti-proxy than shaving one rare extra tap.
  */
 function verifyToken(secret, sessionId, windowIndex, token, windowSeconds) {
   const now = currentWindow(windowSeconds);
@@ -50,8 +48,7 @@ function verifyToken(secret, sessionId, windowIndex, token, windowSeconds) {
 
   if (!Number.isInteger(windowIndexNum)) return { valid: false, forged: true, reason: 'Malformed QR payload' };
   if (windowIndexNum > now) return { valid: false, forged: true, reason: 'QR from the future — clock mismatch' };
-  const maxStaleWindows = Math.max(1, Math.ceil(TOKEN_STALE_MS / (windowSeconds * 1000)));
-  if (now - windowIndexNum > maxStaleWindows) return { valid: false, reason: 'QR expired — rescan the current code' };
+  if (now - windowIndexNum > 1) return { valid: false, reason: 'QR expired — rescan the current code' };
 
   const expected = generateToken(secret, sessionId, windowIndexNum);
   if (expected !== token) return { valid: false, forged: true, reason: 'Token does not match — tampered or forged QR' };

@@ -564,13 +564,9 @@ t('admin: test scans never occupy a real roll/device or skip-block real students
   eq(await mark(real, s2), 201);
 });
 
-// ---------- STALE REPLAY (waits past the TOKEN_STALE_MS grace in utils/token.js) ----------
-// TOKEN_STALE_MS (50s) is a window-COUNT tolerance, not a wall-clock one — since
-// windows are aligned to fixed 10s ticks from the epoch (not from capture time),
-// the real tolerance from the capture instant ranges 50-60s depending on where
-// in its window the capture landed. Wait past the worst case (60s) to be sure.
-t('stale: a QR / 4-digit code captured well past the grace window is rejected', async () => {
-  const wait = 61500 - (Date.now() - stale.at);
+// ---------- STALE REPLAY (waits for >2 rotation windows) ----------
+t('stale: a QR / 4-digit code captured >20s ago is rejected', async () => {
+  const wait = 21500 - (Date.now() - stale.at);
   if (wait > 0) await sleep(wait);
   const a = await newStudent(), b = await newStudent();
   eq(await api('POST', '/api/attendance/mark', { token: a.token, body: { payload: stale.q.payload, rollNo: a.roll, lat: LAT, lng: LNG, accuracy: 8, deviceId: a.device } }), 400);
