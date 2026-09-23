@@ -8,8 +8,17 @@
 //
 // Expected columns (case-insensitive, any order): email, rollNo (or "roll no"/"roll"), name
 const path = require('path');
+require('dotenv').config();
 const mongoose = require('mongoose');
 const Student = require('../models/Student');
+
+// This script's whole job is a real roster import — so unlike normal dev
+// work (server.js, npm test), it should default to the real Atlas DB, not
+// silently import into an empty local dev DB. PROD_MONGO_URI is the real
+// cluster's connection string, kept in .env under its own name specifically
+// so routine local runs never touch it by accident; this script is the one
+// place that intentionally does.
+const TARGET_URI = process.env.PROD_MONGO_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/attendance';
 
 async function main() {
   const file = process.argv[2];
@@ -42,7 +51,10 @@ async function main() {
     process.exit(1);
   }
 
-  await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/attendance');
+  const dns = require('dns');
+  dns.setServers(['8.8.8.8', '1.1.1.1']); // some networks block Node's default DNS SRV lookup for mongodb+srv://
+  console.log(`Connecting to ${TARGET_URI.replace(/\/\/[^:]+:[^@]+@/, '//<hidden>@')} ...`);
+  await mongoose.connect(TARGET_URI);
   console.log(`Connected. Upserting ${students.length} students...`);
 
   let created = 0, updated = 0;
