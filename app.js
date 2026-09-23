@@ -17,6 +17,7 @@ let scanning = false;
 const rows = []; // { rollNo, scannedAt: Date }
 const seenRollNos = new Set();
 let dupeCount = 0;
+const dupeLog = []; // { rollNo, at: Date } — which roll numbers actually got flagged, not just a bare count
 let lastDecoded = { text: null, at: 0 };
 
 // Everything lived only in a JS variable — a reload, an accidentally-closed
@@ -30,6 +31,7 @@ function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       rows: rows.map((r) => ({ rollNo: r.rollNo, scannedAt: r.scannedAt.toISOString() })),
       dupeCount,
+      dupeLog: dupeLog.map((d) => ({ rollNo: d.rollNo, at: d.at.toISOString() })),
     }));
   } catch { /* storage full/unavailable — scanning still works, just unsaved */ }
 }
@@ -46,6 +48,11 @@ function loadState() {
       seenRollNos.add(r.rollNo);
     }
     dupeCount = Number(saved.dupeCount) || 0;
+    for (const d of saved.dupeLog || []) {
+      const at = new Date(d.at);
+      if (!d.rollNo || Number.isNaN(at.getTime())) continue;
+      dupeLog.push({ rollNo: d.rollNo, at });
+    }
   } catch { /* corrupt/unavailable storage — start fresh rather than crash */ }
 }
 
@@ -63,6 +70,8 @@ const els = {
   manualEntry: document.getElementById('manual-entry'),
   manualInput: document.getElementById('manual-input'),
   manualAddBtn: document.getElementById('manual-add-btn'),
+  dupeToggle: document.getElementById('dupe-toggle'),
+  dupeList: document.getElementById('dupe-list'),
 };
 
 function setStatus(text, kind) {
@@ -116,7 +125,26 @@ function renderList() {
   els.count.textContent = rows.length;
   els.dupeCountEl.textContent = dupeCount;
   els.exportBtn.disabled = rows.length === 0;
-  els.clearBtn.disabled = rows.length === 0;
+  // Was tied to rows.length alone — a repeats count could sit stuck at,
+  // say, 1 with an empty list (every scan removed) and Clear had no way
+  // to reach it, since the button was disabled too. Enabled whenever
+  // there's anything at all to clear.
+  els.clearBtn.disabled = rows.length === 0 && dupeCount === 0;
+  renderDupeLog();
+}
+
+function renderDupeLog() {
+  els.dupeList.innerHTML = dupeLog.length === 0
+    ? '<li class="empty">No repeats yet.</li>'
+    : dupeLog
+        .slice()
+        .reverse()
+        .map((d) => `
+          <li>
+            <span class="roll">${escapeHtml(d.rollNo)}</span>
+            <span class="time">${d.at.toLocaleTimeString()}</span>
+          </li>`)
+        .join('');
 }
 
 function escapeHtml(s) {
@@ -182,6 +210,7 @@ function onDecoded(decodedText) {
 
   if (seenRollNos.has(rollNo)) {
     dupeCount++;
+    dupeLog.push({ rollNo, at: new Date() });
     setStatus(`Already scanned: ${rollNo}`, 'info');
     saveState();
     renderList();
@@ -331,11 +360,15 @@ function exportToExcel() {
 }
 
 function clearList() {
-  if (rows.length === 0) return;
-  if (!confirm(`Clear all ${rows.length} scanned entries? This cannot be undone (export first if you need them).`)) return;
+  if (rows.length === 0 && dupeCount === 0) return;
+  const msg = rows.length > 0
+    ? `Clear all ${rows.length} scanned entries and the repeats count? This cannot be undone (export first if you need them).`
+    : `Clear the repeats count (${dupeCount})? There's no scanned list to lose.`;
+  if (!confirm(msg)) return;
   rows.length = 0;
   seenRollNos.clear();
   dupeCount = 0;
+  dupeLog.length = 0;
   lastDecoded = { text: null, at: 0 };
   saveState();
   renderList();
@@ -356,6 +389,13 @@ els.manualToggle.addEventListener('click', (e) => {
 });
 els.manualAddBtn.addEventListener('click', addManualEntry);
 els.manualInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addManualEntry(); });
+
+els.dupeToggle.addEventListener('click', (e) => {
+  e.preventDefault();
+  const isHidden = els.dupeList.style.display === 'none';
+  els.dupeList.style.display = isHidden ? 'block' : 'none';
+  e.target.textContent = isHidden ? 'Hide repeats' : 'View repeats';
+});
 
 loadState();
 renderList();
