@@ -5,6 +5,7 @@
 const READER_ID = 'reader';
 const DUPLICATE_COOLDOWN_MS = 1500; // ignore the same code re-firing while still in frame
 const STORAGE_KEY = 'rollcall_state_v1';
+const ROSTER_KEY = 'rollcall_roster_v1';
 // Roll numbers are always "240" + 6 digits (e.g. 240701424) — the prefix is
 // fixed, the 6 digits vary per department/year/student. Only enforced on
 // manual/edited entries: a real scanned barcode is trusted as-is, since
@@ -19,6 +20,7 @@ const seenRollNos = new Set();
 let dupeCount = 0;
 const dupeLog = []; // { rollNo, at: Date } — which roll numbers actually got flagged, not just a bare count
 let lastDecoded = { text: null, at: 0 };
+const roster = new Map(); // rollNo -> name, loaded separately from the scan session (see ROSTER_KEY)
 
 // Everything lived only in a JS variable — a reload, an accidentally-closed
 // tab, or the OS killing a backgrounded tab (common on both Android and iOS
@@ -56,6 +58,22 @@ function loadState() {
   } catch { /* corrupt/unavailable storage — start fresh rather than crash */ }
 }
 
+// Roster is separate from the scan session on purpose — a teacher loads it
+// once for a class and it should survive "Clear list" between periods/days,
+// only going away via its own "Clear roster".
+function saveRoster() {
+  try { localStorage.setItem(ROSTER_KEY, JSON.stringify([...roster])); } catch { /* not critical */ }
+}
+function loadRoster() {
+  try {
+    const raw = localStorage.getItem(ROSTER_KEY);
+    if (!raw) return;
+    for (const [rollNo, name] of JSON.parse(raw)) {
+      if (typeof rollNo === 'string') roster.set(rollNo, typeof name === 'string' ? name : '');
+    }
+  } catch { /* corrupt/unavailable — start with no roster rather than crash */ }
+}
+
 const els = {
   startBtn: document.getElementById('start-btn'),
   stopBtn: document.getElementById('stop-btn'),
@@ -72,6 +90,14 @@ const els = {
   manualAddBtn: document.getElementById('manual-add-btn'),
   dupeToggle: document.getElementById('dupe-toggle'),
   dupeList: document.getElementById('dupe-list'),
+  countLabel: document.getElementById('count-label'),
+  rosterInput: document.getElementById('roster-input'),
+  rosterLoadBtn: document.getElementById('roster-load-btn'),
+  rosterClearBtn: document.getElementById('roster-clear-btn'),
+  rosterStatus: document.getElementById('roster-status'),
+  absentCard: document.getElementById('absent-card'),
+  absentList: document.getElementById('absent-list'),
+  absentCount: document.getElementById('absent-count'),
 };
 
 function setStatus(text, kind) {
@@ -108,10 +134,11 @@ function renderList() {
       .reverse()
       .map((r, i) => {
         const realIndex = rows.length - 1 - i;
+        const name = roster.get(r.rollNo);
         return `
           <li>
             <span>
-              <span class="roll">${escapeHtml(r.rollNo)}</span><br/>
+              <span class="roll">${escapeHtml(r.rollNo)}</span>${name ? ` — ${escapeHtml(name)}` : ''}<br/>
               <span class="time">${r.scannedAt.toLocaleTimeString()}</span>
             </span>
             <span style="display:flex; flex-shrink:0;">
@@ -122,7 +149,7 @@ function renderList() {
       })
       .join('');
   }
-  els.count.textContent = rows.length;
+  els.count.textContent = roster.size > 0 ? `${rows.length} / ${roster.size}` : String(rows.length);
   els.dupeCountEl.textContent = dupeCount;
   els.exportBtn.disabled = rows.length === 0;
   // Was tied to rows.length alone — a repeats count could sit stuck at,
@@ -131,6 +158,25 @@ function renderList() {
   // there's anything at all to clear.
   els.clearBtn.disabled = rows.length === 0 && dupeCount === 0;
   renderDupeLog();
+  renderAbsent();
+}
+
+// Only meaningful once a roster is loaded — otherwise there's nothing to
+// compare "who scanned" against, so the whole card stays hidden.
+function renderAbsent() {
+  if (roster.size === 0) {
+    els.absentCard.style.display = 'none';
+    return;
+  }
+  const absent = [...roster.entries()].filter(([rollNo]) => !seenRollNos.has(rollNo));
+  els.absentCard.style.display = 'block';
+  els.absentCount.textContent = absent.length;
+  els.absentList.innerHTML = absent.length === 0
+    ? '<li class="empty">Everyone on the roster has been scanned.</li>'
+    : absent
+        .map(([rollNo, name]) => `
+          <li><span class="roll">${escapeHtml(rollNo)}</span>${name ? ` — ${escapeHtml(name)}` : ''}</li>`)
+        .join('');
 }
 
 function renderDupeLog() {
@@ -347,13 +393,25 @@ function addManualEntry() {
 
 function exportToExcel() {
   const data = [
-    ['Roll No', 'Scanned At'],
-    ...rows.map((r) => [r.rollNo, r.scannedAt.toLocaleString()]),
+    ['Roll No', 'Name', 'Scanned At'],
+    ...rows.map((r) => [r.rollNo, roster.get(r.rollNo) || '', r.scannedAt.toLocaleString()]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{ wch: 18 }, { wch: 22 }];
+  ws['!cols'] = [{ wch: 18 }, { wch: 22 }, { wch: 22 }];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Roll Call');
+  XLSX.utils.book_append_sheet(wb, ws, 'Present');
+
+  // Only meaningful with a roster loaded — otherwise there's no "expected
+  // list" to compare against, so a second sheet would just be noise.
+  if (roster.size > 0) {
+    const absentData = [
+      ['Roll No', 'Name'],
+      ...[...roster.entries()].filter(([rollNo]) => !seenRollNos.has(rollNo)),
+    ];
+    const wsAbsent = XLSX.utils.aoa_to_sheet(absentData);
+    wsAbsent['!cols'] = [{ wch: 18 }, { wch: 22 }];
+    XLSX.utils.book_append_sheet(wb, wsAbsent, 'Absent');
+  }
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   XLSX.writeFile(wb, `RollCall_${stamp}.xlsx`);
@@ -397,15 +455,76 @@ els.dupeToggle.addEventListener('click', (e) => {
   e.target.textContent = isHidden ? 'Hide repeats' : 'View repeats';
 });
 
+function setRosterStatus(text, kind) {
+  els.rosterStatus.textContent = text;
+  els.rosterStatus.className = `status show ${kind}`;
+}
+
+function loadRosterFromInput() {
+  const lines = els.rosterInput.value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) { setRosterStatus('Paste at least one line first.', 'err'); return; }
+
+  roster.clear();
+  let skipped = 0;
+  for (const line of lines) {
+    const [rawRoll, ...rest] = line.split(',');
+    const rollNo = (rawRoll || '').trim().toUpperCase();
+    if (!ROLL_NO_RE.test(rollNo)) { skipped++; continue; }
+    roster.set(rollNo, rest.join(',').trim());
+  }
+
+  if (roster.size === 0) { setRosterStatus('No valid roll numbers found (format: 240 + 6 digits).', 'err'); return; }
+
+  saveRoster();
+  els.rosterClearBtn.style.display = 'block';
+  els.rosterInput.value = '';
+  setRosterStatus(`Loaded ${roster.size} student${roster.size === 1 ? '' : 's'}.${skipped ? ` (${skipped} line${skipped === 1 ? '' : 's'} skipped — bad format)` : ''}`, 'ok');
+  renderList();
+}
+
+els.rosterLoadBtn.addEventListener('click', loadRosterFromInput);
+els.rosterClearBtn.addEventListener('click', () => {
+  if (!confirm(`Clear the loaded roster (${roster.size} students)? Already-scanned entries stay, but names/absent-tracking go away.`)) return;
+  roster.clear();
+  saveRoster();
+  els.rosterClearBtn.style.display = 'none';
+  setRosterStatus('Roster cleared.', 'info');
+  renderList();
+});
+
+loadRoster();
+if (roster.size > 0) {
+  els.rosterClearBtn.style.display = 'block';
+  setRosterStatus(`${roster.size} students loaded from before.`, 'info');
+}
+
 loadState();
 renderList();
 if (rows.length > 0) setStatus(`Restored ${rows.length} scan${rows.length === 1 ? '' : 's'} from before — keep going or export.`, 'info');
 
 if ('serviceWorker' in navigator) {
+  // Captured before registering: distinguishes "first-ever install" (no
+  // prior controller, controllerchange fires once with nothing meaningful
+  // to reload) from a genuine update on a return visit.
+  const hadController = !!navigator.serviceWorker.controller;
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => {
       // Offline-first still works without SW registration succeeding —
       // this only affects installability/first-load caching, not scanning.
     });
+  });
+
+  // sw.js already calls skipWaiting()+clients.claim(), so a new version
+  // takes over silently in the background — but the tab's already-running
+  // JS doesn't change until an actual reload. Best practice (confirmed via
+  // search) is to notify, not force-reload: a mid-scan auto-refresh would
+  // drop whatever the teacher was doing. Fires once per real update, not on
+  // the very first install (no pre-existing controller to change from yet).
+  let notified = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (notified || !hadController) return;
+    notified = true;
+    setStatus('Updated — reload the page to get the latest version.', 'info');
   });
 }

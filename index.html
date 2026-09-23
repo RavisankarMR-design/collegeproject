@@ -21,6 +21,19 @@
   <p class="subtitle">Scan each student's ID card barcode. It keeps scanning — the list builds itself. Export to Excel when done. Works fully offline once loaded.</p>
 
   <div class="card">
+    <div class="row" style="margin-bottom:10px;">
+      <h2 style="margin:0; flex:1;">Class roster (optional)</h2>
+    </div>
+    <p class="subtitle" style="margin:0 0 10px;">Paste roll numbers with names to show names while scanning and track who's absent. One per line: roll number, comma, name. Leave empty to just use plain roll numbers.</p>
+    <textarea id="roster-input" rows="3" placeholder="240701424, Ravisankar&#10;240701425, Priya&#10;..." style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.9rem; font-family:inherit; resize:vertical;"></textarea>
+    <div class="row" style="margin-top:8px;">
+      <button id="roster-load-btn" class="secondary">Load roster</button>
+      <button id="roster-clear-btn" class="secondary" style="display:none;">Clear roster</button>
+    </div>
+    <div id="roster-status" class="status"></div>
+  </div>
+
+  <div class="card">
     <div id="reader"></div>
     <div class="row">
       <button id="start-btn" class="primary">📷 Start scanning</button>
@@ -42,7 +55,7 @@
     <div class="stat-row">
       <div class="stat">
         <div class="num" id="count">0</div>
-        <div class="label">Scanned</div>
+        <div class="label" id="count-label">Scanned</div>
       </div>
       <div class="stat">
         <div class="num" id="dupe-count">0</div>
@@ -60,6 +73,13 @@
       <h2 style="margin:0; flex:1;">Roll list</h2>
     </div>
     <ul id="roll-list" class="list"><li class="empty">No scans yet.</li></ul>
+  </div>
+
+  <div class="card" id="absent-card" style="display:none;">
+    <div class="row" style="margin-bottom:10px;">
+      <h2 style="margin:0; flex:1;">Absent (<span id="absent-count">0</span>)</h2>
+    </div>
+    <ul id="absent-list" class="list"></ul>
   </div>
 
   <div class="card">
