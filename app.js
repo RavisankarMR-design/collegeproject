@@ -46,12 +46,17 @@ function loadState() {
 const els = {
   startBtn: document.getElementById('start-btn'),
   stopBtn: document.getElementById('stop-btn'),
+  torchBtn: document.getElementById('torch-btn'),
   status: document.getElementById('scan-status'),
   count: document.getElementById('count'),
   dupeCountEl: document.getElementById('dupe-count'),
   list: document.getElementById('roll-list'),
   exportBtn: document.getElementById('export-btn'),
   clearBtn: document.getElementById('clear-btn'),
+  manualToggle: document.getElementById('manual-toggle'),
+  manualEntry: document.getElementById('manual-entry'),
+  manualInput: document.getElementById('manual-input'),
+  manualAddBtn: document.getElementById('manual-add-btn'),
 };
 
 function setStatus(text, kind) {
@@ -147,6 +152,57 @@ function onDecoded(decodedText) {
   renderList();
 }
 
+// Screen Wake Lock — without this, the phone's own screen timeout dims/locks
+// the screen mid-class (idle hands, camera pointed at a card, no touches),
+// which stops the camera stream entirely and forces restarting the scanner.
+// Supported on iOS Safari 16.4+ and effectively every current browser; where
+// it isn't supported, scanning still works exactly as before, just without
+// the extra protection.
+let wakeLock = null;
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+  } catch { /* e.g. battery saver mode refusing it — scanning still works, just no lock */ }
+}
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+// The lock is auto-released whenever the tab is hidden (spec behavior) — if
+// still scanning when the tab becomes visible again, re-request it so a
+// brief app-switch (checking something else) doesn't silently drop the lock
+// for the rest of the class.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && scanning) acquireWakeLock();
+});
+
+// Torch/flashlight — only actually controllable via getUserMedia on some
+// Android/Chromium combinations; iOS Safari doesn't expose it at all, so
+// this button only appears where the running camera track reports the
+// capability, instead of showing a button that would silently do nothing.
+async function updateTorchButton() {
+  els.torchBtn.style.display = 'none';
+  if (!scanner) return;
+  try {
+    const caps = scanner.getRunningTrackCameraCapabilities();
+    if (caps && caps.torchFeature && caps.torchFeature().isSupported()) {
+      els.torchBtn.style.display = 'block';
+      els.torchBtn.dataset.on = 'false';
+      els.torchBtn.textContent = '🔦';
+    }
+  } catch { /* capability check itself unsupported — just skip the button */ }
+}
+async function toggleTorch() {
+  if (!scanner) return;
+  const isOn = els.torchBtn.dataset.on === 'true';
+  try {
+    const caps = scanner.getRunningTrackCameraCapabilities();
+    await caps.torchFeature().apply(!isOn);
+    els.torchBtn.dataset.on = String(!isOn);
+    els.torchBtn.textContent = isOn ? '🔦' : '💡';
+  } catch { /* device refused mid-session — leave state as it was */ }
+}
+
 async function startScanning() {
   clearStatus();
   els.startBtn.disabled = true;
@@ -181,6 +237,8 @@ async function startScanning() {
     els.startBtn.style.display = 'none';
     els.stopBtn.style.display = 'block';
     setStatus('Scanning — hold each ID card steady in the box.', 'info');
+    acquireWakeLock();
+    updateTorchButton();
   } catch (err) {
     els.startBtn.disabled = false;
     setStatus('Could not access camera: ' + (err && err.message ? err.message : err), 'err');
@@ -197,7 +255,17 @@ async function stopScanning() {
   els.startBtn.style.display = 'block';
   els.startBtn.disabled = false;
   els.stopBtn.style.display = 'none';
+  els.torchBtn.style.display = 'none';
+  releaseWakeLock();
   clearStatus();
+}
+
+function addManualEntry() {
+  const rollNo = els.manualInput.value.trim();
+  if (!rollNo) return;
+  onDecoded(rollNo); // same dedupe/persistence/beep path as a real scan
+  els.manualInput.value = '';
+  els.manualInput.focus();
 }
 
 function exportToExcel() {
@@ -227,8 +295,19 @@ function clearList() {
 
 els.startBtn.addEventListener('click', startScanning);
 els.stopBtn.addEventListener('click', stopScanning);
+els.torchBtn.addEventListener('click', toggleTorch);
 els.exportBtn.addEventListener('click', exportToExcel);
 els.clearBtn.addEventListener('click', clearList);
+
+els.manualToggle.addEventListener('click', (e) => {
+  e.preventDefault();
+  const isHidden = els.manualEntry.style.display === 'none';
+  els.manualEntry.style.display = isHidden ? 'flex' : 'none';
+  e.target.textContent = isHidden ? 'Hide manual entry' : "Can't scan a barcode? Enter it manually";
+  if (isHidden) els.manualInput.focus();
+});
+els.manualAddBtn.addEventListener('click', addManualEntry);
+els.manualInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addManualEntry(); });
 
 loadState();
 renderList();

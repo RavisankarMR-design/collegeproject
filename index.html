@@ -25,8 +25,17 @@
     <div class="row">
       <button id="start-btn" class="primary">📷 Start scanning</button>
       <button id="stop-btn" class="secondary" style="display:none;">⏹ Stop</button>
+      <button id="torch-btn" class="secondary" style="display:none; flex:0 0 auto; width:auto;">🔦</button>
     </div>
     <div id="scan-status" class="status"></div>
+
+    <p class="footer-note" style="margin:10px 0 0;">
+      <a href="#" id="manual-toggle">Can't scan a barcode? Enter it manually</a>
+    </p>
+    <div id="manual-entry" class="row" style="display:none; margin-top:8px;">
+      <input type="text" id="manual-input" placeholder="Roll number / ID" inputmode="numeric" style="flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.95rem;" />
+      <button id="manual-add-btn" class="secondary" style="flex:0 0 auto; width:auto; margin-top:0;">Add</button>
+    </div>
   </div>
 
   <div class="card">
