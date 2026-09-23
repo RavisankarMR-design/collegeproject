@@ -6,12 +6,12 @@ const READER_ID = 'reader';
 const DUPLICATE_COOLDOWN_MS = 1500; // ignore the same code re-firing while still in frame
 const STORAGE_KEY = 'rollcall_state_v1';
 const ROSTER_KEY = 'rollcall_roster_v1';
-// Roll numbers are always "240" + 6 digits (e.g. 240701424) — the prefix is
-// fixed, the 6 digits vary per department/year/student. Only enforced on
-// manual/edited entries: a real scanned barcode is trusted as-is, since
-// forcing this pattern on it could reject a genuine card over a benign
-// encoding difference.
-const ROLL_NO_RE = /^240\d{6}$/;
+// Roll numbers are always "24" + 7 digits (e.g. 240701424) — only the first
+// two digits are fixed, the other 7 vary per year/department/student. Only
+// enforced on manual/edited entries: a real scanned barcode is trusted
+// as-is, since forcing this pattern on it could reject a genuine card over
+// a benign encoding difference.
+const ROLL_NO_RE = /^24\d{7}$/;
 
 let scanner = null;
 let scanning = false;
@@ -232,7 +232,7 @@ function editEntry(idx) {
   if (!rollNo || rollNo === row.rollNo) return;
 
   if (!ROLL_NO_RE.test(rollNo)) {
-    alert('Roll number must be 240 followed by 6 digits (e.g. 240701424).');
+    alert('Roll number must be 24 followed by 7 digits (e.g. 240701424).');
     return;
   }
   if (seenRollNos.has(rollNo)) {
@@ -386,7 +386,7 @@ function addManualEntry() {
   const rollNo = els.manualInput.value.trim();
   if (!rollNo) return;
   if (!ROLL_NO_RE.test(rollNo)) {
-    setStatus('Roll number must be 240 followed by 6 digits (e.g. 240701424).', 'err');
+    setStatus('Roll number must be 24 followed by 7 digits (e.g. 240701424).', 'err');
     return;
   }
   onDecoded(rollNo); // same dedupe/persistence/beep path as a real scan
