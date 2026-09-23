@@ -16,9 +16,6 @@
   </p>
 
   <div class="card">
-    <label for="rollNo">Roll number</label>
-    <input id="rollNo" placeholder="e.g. 240701424" autocomplete="off" inputmode="numeric" maxlength="9" />
-
     <button id="scan-btn">Scan classroom QR</button>
 
     <div class="reader-frame" id="reader-frame" style="display:none;">
@@ -136,31 +133,15 @@
     };
 
     document.getElementById('code-submit-btn').onclick = () => {
-      const rollNo = document.getElementById('rollNo').value.trim();
-      if (!rollNo) { showMsg('Enter your roll number first.', false); return; }
-      if (!validRollNo(rollNo)) { showMsg('Wrong roll number format — must be 24070 followed by 4 digits (e.g. 240701424).', false); return; }
-
       const code = document.getElementById('liveCode').value.trim();
       if (!code) { showMsg('Enter the live code shown on the teacher\'s screen.', false); return; }
 
       busyBtnId = 'code-submit-btn';
       document.getElementById('result').innerHTML = '';
-      handleScan({ code }, rollNo);
+      handleScan({ code });
     };
 
-    // Keep in sync with the server-side check in routes/attendance.js (search
-    // "Wrong roll number format") — this is just a fast client-side pre-check,
-    // the server enforces the real rule.
-    function validRollNo(rollNo) {
-      if (auth && auth.role === 'admin') return true; // admin uses arbitrary test values
-      return /^24070\d{4}$/.test(rollNo);
-    }
-
     document.getElementById('scan-btn').onclick = () => {
-      const rollNo = document.getElementById('rollNo').value.trim();
-      if (!rollNo) { showMsg('Enter your roll number first.', false); return; }
-      if (!validRollNo(rollNo)) { showMsg('Wrong roll number format — must be 24070 followed by 4 digits (e.g. 240701424).', false); return; }
-
       busyBtnId = 'scan-btn';
       setBusy(true, 'Opening camera...');
       document.getElementById('reader-frame').style.display = 'block';
@@ -174,7 +155,7 @@
           await scanner.stop();
           scanner.clear();
           document.getElementById('reader-frame').style.display = 'none';
-          handleScan({ payload: decodedText }, rollNo);
+          handleScan({ payload: decodedText });
         },
         () => {} // ignore per-frame scan failures
       ).catch((err) => {
@@ -187,9 +168,6 @@
     document.getElementById('qr-file').onchange = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const rollNo = document.getElementById('rollNo').value.trim();
-      if (!rollNo) { showMsg('Enter your roll number first.', false); e.target.value = ''; return; }
-      if (!validRollNo(rollNo)) { showMsg('Wrong roll number format — must be 24070 followed by 4 digits (e.g. 240701424).', false); e.target.value = ''; return; }
 
       busyBtnId = 'scan-btn';
       setBusy(true, 'Reading QR image...');
@@ -197,7 +175,7 @@
       const fileScanner = new Html5Qrcode('reader');
       try {
         const decodedText = await fileScanner.scanFile(file, false);
-        handleScan({ payload: decodedText }, rollNo);
+        handleScan({ payload: decodedText });
       } catch (err) {
         showMsg('Could not read a QR code from that image: ' + (err && err.message ? err.message : err), false);
         setBusy(false);
@@ -213,20 +191,10 @@
       div.replaceChildren(box);
     }
 
-    // A roll number typo only gets one free silent auto-correction server-side
-    // (see routes/attendance.js) — after that it's locked and needs staff to
-    // release it. Catching the typo here, before it ever reaches the server,
-    // means an honest mistake doesn't burn that one free correction.
-    function confirmRollChange(rollNo) {
-      const lastRoll = localStorage.getItem('last_roll_no');
-      if (lastRoll && lastRoll !== rollNo) {
-        return confirm(`You last scanned in with roll number ${lastRoll}. Submit ${rollNo} instead?\n\nOnly pick "OK" if ${lastRoll} was a typo — you only get one free correction, after that a staff member has to release it.`);
-      }
-      return true;
-    }
-
-    function handleScan(identity, rollNo) {
-      if (!confirmRollChange(rollNo)) { setBusy(false); return; }
+    // Roll number/name are no longer typed here — the server looks them up
+    // from the pre-enrolled roster by the signed-in email (see
+    // routes/attendance.js). Nothing to self-correct on this end anymore.
+    function handleScan(identity) {
       if (!navigator.geolocation) { showMsg('Geolocation not supported on this device.', false); setBusy(false); return; }
 
       setBusy(true, 'Getting GPS fix...');
@@ -235,7 +203,6 @@
           setBusy(true, `Verifying (GPS accuracy ~${Math.round(pos.accuracy)}m)...`);
           const body = {
             ...identity,
-            rollNo,
             lat: pos.lat,
             lng: pos.lng,
             accuracy: pos.accuracy,
@@ -249,7 +216,6 @@
           const data = await res.json();
           setBusy(false);
           if (res.ok) {
-            localStorage.setItem('last_roll_no', rollNo);
             const note = data.borderline
               ? ' — near the edge of the detection radius, flagged for teacher review.'
               : '.';

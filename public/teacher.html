@@ -88,13 +88,17 @@
 
     <div class="card">
       <div class="stat-row">
-        <div class="stat">
+        <div class="stat ok">
           <div class="num" id="count">0</div>
-          <div class="label" id="count-label">Present</div>
+          <div class="label" id="count-label">Submitted</div>
         </div>
-        <div class="stat">
+        <div class="stat err" id="absent-stat" style="display:none;">
+          <div class="num" id="absent-count">0</div>
+          <div class="label">Absent</div>
+        </div>
+        <div class="stat warn">
           <div class="num" id="flagged-count">0</div>
-          <div class="label">Flagged attempts</div>
+          <div class="label">Flags</div>
         </div>
       </div>
     </div>
@@ -285,7 +289,7 @@
       document.getElementById('subject-title').textContent = data.subject;
       document.getElementById('radius-badge').textContent = `📍 ${data.classroom.radiusMeters}m radius`;
       document.getElementById('roster-badge').textContent = rosterSize > 0 ? `👥 ${rosterSize} enrolled` : '👥 open roster';
-      document.getElementById('count-label').textContent = rosterSize > 0 ? `Present / ${rosterSize}` : 'Present';
+      document.getElementById('count-label').textContent = rosterSize > 0 ? `Submitted / ${rosterSize}` : 'Submitted';
       renderDisplayCode();
       renderEndTimeBadge();
 
@@ -471,6 +475,13 @@
       const res = await fetch(`/api/sessions/${sessionId}/attendance?code=${displayCode}`);
       const records = await res.json();
       document.getElementById('count').textContent = records.length;
+      const absentStat = document.getElementById('absent-stat');
+      if (rosterSize > 0) {
+        absentStat.style.display = '';
+        document.getElementById('absent-count').textContent = Math.max(0, rosterSize - records.length);
+      } else {
+        absentStat.style.display = 'none';
+      }
       const ul = document.getElementById('present-list');
       if (records.length === 0) {
         ul.innerHTML = '<li class="empty">No one has scanned in yet.</li>';

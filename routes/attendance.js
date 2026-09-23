@@ -145,13 +145,28 @@ router.post('/mark', requireAuth('student'), markLimiter, async (req, res) => {
     const io = req.app.get('io');
     const { email, name, role } = req.user;
     const isAdmin = role === 'admin';
-    const { payload, code, rollNo, lat, lng, accuracy, deviceId } = req.body;
+    const { payload, code, lat, lng, accuracy, deviceId } = req.body;
+    let { rollNo } = req.body;
     const bad = (msg) => res.status(400).json({ error: msg });
 
     // ---- shape validation: anything malformed is a 400 before it can reach
     // ---- the geofence math, the database, or the flag log.
-    if ((!payload && !code) || !rollNo || lat == null || lng == null || !deviceId) {
-      return bad('A QR scan (or live code), rollNo, lat, lng, deviceId are all required');
+    if ((!payload && !code) || lat == null || lng == null || !deviceId) {
+      return bad('A QR scan (or live code), lat, lng, deviceId are all required');
+    }
+    // rollNo is no longer typed by the student — it's pulled from the
+    // pre-enrolled roster (models/Student.js) by their signed-in email, so a
+    // locked roster class needs zero manual entry on the student side. A
+    // client that still sends rollNo explicitly (e.g. older cached page,
+    // admin test scans) keeps working — this only fills the gap when absent.
+    if (!rollNo) {
+      if (isAdmin) {
+        rollNo = `ADMIN-${email.split('@')[0].toUpperCase()}`;
+      } else {
+        const pre = await Student.findOne({ email }).select('rollNo').lean();
+        if (!pre) return bad('Your account is not enrolled in this class yet — ask your teacher to add you to the roster.');
+        rollNo = pre.rollNo;
+      }
     }
     if (payload !== undefined && (typeof payload !== 'string' || payload.length > 200)) return bad('Malformed QR — please rescan');
     if (!payload && (!['string', 'number'].includes(typeof code) || String(code).trim().length < 1 || String(code).trim().length > 8)) {

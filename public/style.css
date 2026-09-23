@@ -112,6 +112,9 @@ button.danger { background: var(--err-bg); color: var(--err); border: 1px solid 
 }
 .stat .num { font-size: 1.6rem; font-weight: 700; }
 .stat .label { font-size: .72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
+.stat.ok .num { color: var(--ok); }
+.stat.err .num { color: var(--err); }
+.stat.warn .num { color: var(--warn); }
 
 #qr-box { text-align: center; margin: 4px 0 12px; position: relative; }
 #qr-canvas { border-radius: 10px; background: #fff; padding: 12px; }

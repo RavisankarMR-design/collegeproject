@@ -88,6 +88,20 @@ rigor:
   of the QR (decoded client-side via the same library), for testing on a
   machine with no webcam or as a backup path.
 
+## If the server is down mid-class
+
+No offline queue or multi-region failover — this is a free-tier deployment,
+not built for high availability. If `/api/health` (DB ping + uptime) reports
+down, or the app just won't respond:
+
+- **Fall back to paper roll-call**, then backfill via `teacher.html`'s manual
+  attendance entry once the app is back.
+- **Open `teacher.html` 1-2 minutes before class starts** — the free Render
+  instance sleeps after ~15min idle and takes ~22.8s to cold-start; opening
+  early avoids racing that against the first student's scan.
+- Check `/api/health` first to tell "server is actually down" apart from "my
+  own phone/network is the problem" before assuming the worst.
+
 ## Known limitations (good to state upfront, not hide)
 
 - **GPS accuracy is a hard physical limit, not a bug.** Tested live:

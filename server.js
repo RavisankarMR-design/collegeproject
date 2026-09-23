@@ -49,6 +49,14 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/students', studentRoutes);
 
+// Lets staff tell "server's actually down" apart from "my phone/wifi is
+// bad" before assuming the worst mid-class — checks DB reachability too,
+// not just that the process is alive.
+app.get('/api/health', (req, res) => {
+  const dbUp = mongoose.connection.readyState === 1;
+  res.status(dbUp ? 200 : 503).json({ ok: dbUp, db: dbUp ? 'up' : 'down', uptimeSeconds: Math.round(process.uptime()) });
+});
+
 const server = http.createServer(app);
 // Rooms are keyed by sessionId, so a push only reaches teacher panels
 // watching that specific session, not every open tab on the server.
