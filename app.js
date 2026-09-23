@@ -4,6 +4,7 @@
 
 const READER_ID = 'reader';
 const DUPLICATE_COOLDOWN_MS = 1500; // ignore the same code re-firing while still in frame
+const STORAGE_KEY = 'rollcall_state_v1';
 
 let scanner = null;
 let scanning = false;
@@ -11,6 +12,36 @@ const rows = []; // { rollNo, scannedAt: Date }
 const seenRollNos = new Set();
 let dupeCount = 0;
 let lastDecoded = { text: null, at: 0 };
+
+// Everything lived only in a JS variable — a reload, an accidentally-closed
+// tab, or the OS killing a backgrounded tab (common on both Android and iOS
+// once you switch away to check something else) wiped the whole scanned
+// list with no way back. Persisted to localStorage on every change instead,
+// so the list survives all of that and is only ever gone when "Clear list"
+// is used on purpose.
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      rows: rows.map((r) => ({ rollNo: r.rollNo, scannedAt: r.scannedAt.toISOString() })),
+      dupeCount,
+    }));
+  } catch { /* storage full/unavailable — scanning still works, just unsaved */ }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    for (const r of saved.rows || []) {
+      const scannedAt = new Date(r.scannedAt);
+      if (!r.rollNo || Number.isNaN(scannedAt.getTime())) continue; // skip corrupt entries, don't crash the whole restore
+      rows.push({ rollNo: r.rollNo, scannedAt });
+      seenRollNos.add(r.rollNo);
+    }
+    dupeCount = Number(saved.dupeCount) || 0;
+  } catch { /* corrupt/unavailable storage — start fresh rather than crash */ }
+}
 
 const els = {
   startBtn: document.getElementById('start-btn'),
@@ -86,6 +117,7 @@ els.list.addEventListener('click', (e) => {
   const idx = Number(btn.dataset.index);
   const removed = rows.splice(idx, 1)[0];
   if (removed) seenRollNos.delete(removed.rollNo);
+  saveState();
   renderList();
 });
 
@@ -102,6 +134,7 @@ function onDecoded(decodedText) {
   if (seenRollNos.has(rollNo)) {
     dupeCount++;
     setStatus(`Already scanned: ${rollNo}`, 'info');
+    saveState();
     renderList();
     return;
   }
@@ -110,6 +143,7 @@ function onDecoded(decodedText) {
   rows.push({ rollNo, scannedAt: new Date() });
   beep();
   setStatus(`Added: ${rollNo}`, 'ok');
+  saveState();
   renderList();
 }
 
@@ -187,6 +221,7 @@ function clearList() {
   seenRollNos.clear();
   dupeCount = 0;
   lastDecoded = { text: null, at: 0 };
+  saveState();
   renderList();
 }
 
@@ -195,7 +230,9 @@ els.stopBtn.addEventListener('click', stopScanning);
 els.exportBtn.addEventListener('click', exportToExcel);
 els.clearBtn.addEventListener('click', clearList);
 
+loadState();
 renderList();
+if (rows.length > 0) setStatus(`Restored ${rows.length} scan${rows.length === 1 ? '' : 's'} from before — keep going or export.`, 'info');
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
