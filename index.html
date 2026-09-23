@@ -21,16 +21,18 @@
   <p class="subtitle">Scan each student's ID card barcode. It keeps scanning — the list builds itself. Export to Excel when done. Works fully offline once loaded.</p>
 
   <div class="card">
-    <div class="row" style="margin-bottom:10px;">
-      <h2 style="margin:0; flex:1;">Class roster (optional)</h2>
+    <p class="footer-note" style="margin:0;">
+      <a href="#" id="roster-toggle">Have a class roster? Tap to add names + absent tracking</a>
+    </p>
+    <div id="roster-section" style="display:none; margin-top:10px;">
+      <p class="subtitle" style="margin:0 0 10px;">Paste roll numbers with names to show names while scanning and track who's absent. One per line: roll number, comma, name. Skip this entirely to just scan plain roll numbers — useful until the college roster/DB is wired in.</p>
+      <textarea id="roster-input" rows="3" placeholder="240701424, Ravisankar&#10;240701425, Priya&#10;..." style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.9rem; font-family:inherit; resize:vertical;"></textarea>
+      <div class="row" style="margin-top:8px;">
+        <button id="roster-load-btn" class="secondary">Load roster</button>
+        <button id="roster-clear-btn" class="secondary" style="display:none;">Clear roster</button>
+      </div>
+      <div id="roster-status" class="status"></div>
     </div>
-    <p class="subtitle" style="margin:0 0 10px;">Paste roll numbers with names to show names while scanning and track who's absent. One per line: roll number, comma, name. Leave empty to just use plain roll numbers.</p>
-    <textarea id="roster-input" rows="3" placeholder="240701424, Ravisankar&#10;240701425, Priya&#10;..." style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.9rem; font-family:inherit; resize:vertical;"></textarea>
-    <div class="row" style="margin-top:8px;">
-      <button id="roster-load-btn" class="secondary">Load roster</button>
-      <button id="roster-clear-btn" class="secondary" style="display:none;">Clear roster</button>
-    </div>
-    <div id="roster-status" class="status"></div>
   </div>
 
   <div class="card">
@@ -83,6 +85,8 @@
   </div>
 
   <div class="card">
+    <label for="export-filename">File name (optional)</label>
+    <input type="text" id="export-filename" placeholder="e.g. RollCall_2026-09-24" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.95rem; margin-bottom:8px;" />
     <button id="export-btn" class="primary" disabled>⬇ Export to Excel (.xlsx)</button>
     <button id="clear-btn" class="danger" disabled>🗑 Clear list</button>
   </div>

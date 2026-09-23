@@ -83,6 +83,7 @@ const els = {
   dupeCountEl: document.getElementById('dupe-count'),
   list: document.getElementById('roll-list'),
   exportBtn: document.getElementById('export-btn'),
+  exportFilename: document.getElementById('export-filename'),
   clearBtn: document.getElementById('clear-btn'),
   manualToggle: document.getElementById('manual-toggle'),
   manualEntry: document.getElementById('manual-entry'),
@@ -91,6 +92,8 @@ const els = {
   dupeToggle: document.getElementById('dupe-toggle'),
   dupeList: document.getElementById('dupe-list'),
   countLabel: document.getElementById('count-label'),
+  rosterToggle: document.getElementById('roster-toggle'),
+  rosterSection: document.getElementById('roster-section'),
   rosterInput: document.getElementById('roster-input'),
   rosterLoadBtn: document.getElementById('roster-load-btn'),
   rosterClearBtn: document.getElementById('roster-clear-btn'),
@@ -414,7 +417,13 @@ function exportToExcel() {
   }
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  XLSX.writeFile(wb, `RollCall_${stamp}.xlsx`);
+  const defaultName = `RollCall_${stamp}`;
+  // Optional rename before download — e.g. "Physics_240923" instead of a
+  // bare timestamp. Sanitised so a stray / or \ in what they typed can't
+  // turn into a nested path in the downloaded filename.
+  const typed = els.exportFilename.value.trim().replace(/[\\/:*?"<>|]/g, '');
+  const base = typed || defaultName;
+  XLSX.writeFile(wb, `${base.replace(/\.xlsx$/i, '')}.xlsx`);
 }
 
 function clearList() {
@@ -492,10 +501,25 @@ els.rosterClearBtn.addEventListener('click', () => {
   renderList();
 });
 
+// Hidden by default — most classes don't have a roster yet (college DB isn't
+// wired in), so showing an empty paste-box up front would just be clutter.
+// Only opt in if there's actually a reason to.
+els.rosterToggle.addEventListener('click', (e) => {
+  e.preventDefault();
+  const isHidden = els.rosterSection.style.display === 'none';
+  els.rosterSection.style.display = isHidden ? 'block' : 'none';
+  e.target.textContent = isHidden ? 'Hide class roster' : "Have a class roster? Tap to add names + absent tracking";
+});
+
 loadRoster();
 if (roster.size > 0) {
   els.rosterClearBtn.style.display = 'block';
   setRosterStatus(`${roster.size} students loaded from before.`, 'info');
+  // A roster was already loaded on a previous visit — open the section so
+  // "Clear roster" and the count are actually visible, not hidden behind
+  // the toggle with no visible sign a roster exists.
+  els.rosterSection.style.display = 'block';
+  els.rosterToggle.textContent = 'Hide class roster';
 }
 
 loadState();
