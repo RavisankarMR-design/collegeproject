@@ -18,10 +18,13 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  padding: 16px;
   max-width: 640px;
   margin: 0 auto;
-  padding-bottom: 48px;
+  /* env(safe-area-inset-*) keeps content clear of the iPhone notch/home
+     indicator when installed as a standalone PWA (viewport-fit=cover in
+     index.html opts into drawing under them in the first place). The
+     16px/48px are the same base padding as before, just added to the inset. */
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 }
 
 h1 {
@@ -118,9 +121,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border: none;
   color: var(--text-dim);
   font-size: 1.1rem;
-  width: auto;
-  padding: 2px 8px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px; /* Apple/Android's own minimum tap-target size — was ~20px, */
+  min-height: 44px; /* too small to reliably hit one-handed mid-class */
+  padding: 0;
   margin: 0;
+  flex-shrink: 0;
 }
 .list li .remove:hover { color: var(--err); }
 
