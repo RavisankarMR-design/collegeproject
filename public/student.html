@@ -162,7 +162,10 @@
       return /^24070\d{4}$/.test(rollNo);
     }
 
-    document.getElementById('scan-btn').onclick = () => {
+    // Named (not anonymous) so the qrPayload direct-mark flow below can
+    // switch back to it if that captured token turns out to have expired —
+    // that payload is dead at that point, only a real fresh scan works.
+    function openCameraScan() {
       const rollNo = document.getElementById('rollNo').value.trim();
       if (!rollNo) { showMsg('Enter your roll number first.', false); return; }
       if (!validRollNo(rollNo)) { showMsg('Wrong roll number format — must be 24070 followed by 4 digits (e.g. 240701424).', false); return; }
@@ -188,7 +191,8 @@
         showMsg('Could not access camera: ' + (err && err.message ? err.message : err), false);
         setBusy(false);
       });
-    };
+    }
+    document.getElementById('scan-btn').onclick = openCameraScan;
 
     // The QR now encodes a full student.html?p=<payload> URL (so a phone's
     // stock camera app can open it directly). The in-app camera scanner
@@ -209,6 +213,27 @@
       box.className = 'msg ' + (ok ? 'ok' : 'err');
       box.textContent = text; // never innerHTML: some messages can echo server/user text
       div.replaceChildren(box);
+    }
+
+    // The captured token (from a direct camera-app link) can still expire if
+    // login/GPS took long enough — that specific payload is now dead, so the
+    // only real fix is a genuinely fresh scan, not resubmitting it. Puts a
+    // real "Scan again" button right where the error is, instead of leaving
+    // the student stuck on a "Mark present" button that will just fail again.
+    function showExpiredMsg() {
+      const div = document.getElementById('result');
+      const box = document.createElement('div');
+      box.className = 'msg err';
+      box.textContent = 'That QR expired while signing in. ';
+      const btn = document.createElement('button');
+      btn.textContent = 'Scan again';
+      btn.style.cssText = 'width:auto; margin:6px 0 0; padding:6px 14px; font-size:.85rem;';
+      btn.onclick = openCameraScan;
+      div.replaceChildren(box, btn);
+      const scanBtn = document.getElementById('scan-btn');
+      scanBtn.textContent = 'Scan classroom QR';
+      busyBtnLabel['scan-btn'] = 'Scan classroom QR';
+      scanBtn.onclick = openCameraScan;
     }
 
     // A roll number typo only gets one free silent auto-correction server-side
@@ -252,6 +277,8 @@
               ? ' — near the edge of the detection radius, flagged for teacher review.'
               : '.';
             showMsg(`✓ Marked present — ~${data.distanceMeters}m from classroom center (GPS accuracy ~${Math.round(data.accuracyMeters)}m)${note}`, true);
+          } else if (/expired/i.test(data.error || '')) {
+            showExpiredMsg();
           } else {
             showMsg(data.error, false);
           }
