@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const mongoose = require('mongoose');
 const path = require('path');
 const http = require('http');
@@ -40,9 +41,27 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   next();
 });
+// Weak/low campus WiFi is the actual daily condition this runs under —
+// gzipping text responses (HTML/JS/CSS/JSON, all highly compressible) cuts
+// bytes-on-the-wire on every request, not just page load.
+app.use(compression());
 app.use(cors());
 app.use(express.json({ limit: '20kb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  // HTML must always be revalidated — it's what carries this deploy's actual
+  // logic (browser gate, roll format, etc); serving a stale cached copy after
+  // a fix ships would silently undo it. JS/CSS/vendored libraries only change
+  // when we push a new deploy, so on a weak connection there's no reason to
+  // make every visit re-fetch (or even re-validate) them over the network —
+  // cache them for a day and let the browser skip the round-trip entirely.
+  setHeaders: (res, filePath) => {
+    if (/\.(html)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    }
+  },
+}));
 
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/attendance', attendanceRoutes);
