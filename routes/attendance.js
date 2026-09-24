@@ -172,7 +172,7 @@ router.post('/mark', requireAuth('student'), markLimiter, async (req, res) => {
     if (!payload && (!['string', 'number'].includes(typeof code) || String(code).trim().length < 1 || String(code).trim().length > 8)) {
       return bad('Enter the live code shown on the teacher\'s screen.');
     }
-    if (typeof rollNo !== 'string' || rollNo.trim().length > 30) return bad('Wrong roll number format — must be 24070 followed by 4 digits (e.g. 240701424).');
+    if (typeof rollNo !== 'string' || rollNo.trim().length > 30) return bad('Wrong roll number format — must be 24 followed by 7 digits (e.g. 240701424).');
     if (typeof deviceId !== 'string' || deviceId.length > 128) return bad('Invalid device id.');
     // Strict numbers only: a string/NaN/Infinity here would make every distance
     // comparison below silently false and wave the scan through the geofence.
@@ -192,13 +192,14 @@ router.post('/mark', requireAuth('student'), markLimiter, async (req, res) => {
     }
 
     const normalizedRoll = rollNo.trim().toUpperCase();
-    // Roll numbers here are always "24070" + 4 digits (e.g. 240701424) — the
-    // prefix is fixed, only the last 4 digits vary per student. Admin is
-    // exempt — it uses arbitrary test values, isolated from real students.
-    // Keep in sync with public/student.html's validRollNo — that's just a
-    // client-side pre-check, this is the rule that's actually enforced.
-    if (!isAdmin && !/^24070\d{4}$/.test(normalizedRoll)) {
-      return bad('Wrong roll number format — must be 24070 followed by 4 digits (e.g. 240701424).');
+    // Roll numbers here are always "24" + 7 digits (e.g. 240701424) — only
+    // the first two digits are fixed, the other 7 vary per year/department/
+    // student. Admin is exempt — it uses arbitrary test values, isolated
+    // from real students. Keep in sync with public/student.html's
+    // validRollNo — that's just a client-side pre-check, this is the rule
+    // that's actually enforced.
+    if (!isAdmin && !/^24\d{7}$/.test(normalizedRoll)) {
+      return bad('Wrong roll number format — must be 24 followed by 7 digits (e.g. 240701424).');
     }
 
     // Guessing the code / forging tokens locks the account out for a while.

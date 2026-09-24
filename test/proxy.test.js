@@ -244,13 +244,17 @@ t('geo: GPS accuracy worse than 100m rejected', async () => {
 });
 
 // ---------- ROLL NUMBER ----------
-t('roll: only 24070 + 4 digits accepted', async () => {
+t('roll: only 24 + 7 digits accepted', async () => {
   const s = await mkSession(staff1);
-  for (const bad of ['', '24070', '2407012345', '240691234', 'abcdefghi', '24070123x', '２４０７０１２３４', '24070 1234', '240701234;', "24070'--"]) {
+  for (const bad of ['', '24070', '2407012345', '250701234', 'abcdefghi', '24070123x', '２４０７０１２３４', '24070 1234', '240701234;', "24070'--"]) {
     const st = await newStudent();
     const r = await mark(st, s, { rollNo: bad });
     assert.ok([400].includes(r.status), `roll ${JSON.stringify(bad)} -> ${r.status} ${r.text.slice(0, 100)}`);
   }
+});
+t('roll: only the first two digits are actually fixed — the 3rd digit varies too', async () => {
+  const st = await newStudent(); const s = await mkSession(staff1);
+  eq(await mark(st, s, { rollNo: '240691234' }), 201, 'a roll not starting with the old 24070 prefix must now be accepted');
 });
 t('roll: non-string rollNo never 500', async () => {
   const s = await mkSession(staff1);
