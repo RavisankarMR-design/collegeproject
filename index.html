@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="style.css" />
 <script src="vendor/html5-qrcode.min.js"></script>
 <script src="vendor/xlsx.full.min.js"></script>
+<script src="roster-class1.js"></script>
 </head>
 <body>
   <h1>ID Barcode Roll Call</h1>
@@ -25,7 +26,10 @@
       <a href="#" id="roster-toggle">Have a class roster? Tap to add names + absent tracking</a>
     </p>
     <div id="roster-section" style="display:none; margin-top:10px;">
-      <p class="subtitle" style="margin:0 0 10px;">Paste roll numbers with names to show names while scanning and track who's absent. One per line: roll number, comma, name. Skip this entirely to just scan plain roll numbers — useful until the college roster/DB is wired in.</p>
+      <p class="subtitle" style="margin:0 0 6px;">
+        <button id="trial-roster-btn" class="secondary" style="width:auto; margin-top:0; padding:6px 12px; font-size:.85rem;">Use Trial Class 1 roster (140 students)</button>
+      </p>
+      <p class="subtitle" style="margin:0 0 10px;">Or paste your own: roll numbers with names to show names while scanning and track who's absent. One per line: roll number, comma, name. Skip this entirely to just scan plain roll numbers.</p>
       <textarea id="roster-input" rows="3" placeholder="240701424, Ravisankar&#10;240701425, Priya&#10;..." style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.9rem; font-family:inherit; resize:vertical;"></textarea>
       <div class="row" style="margin-top:8px;">
         <button id="roster-load-btn" class="secondary">Load roster</button>

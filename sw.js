@@ -1,13 +1,14 @@
 // Cache-first service worker so this tool works with zero internet after
 // the very first visit — every asset it needs is vendored locally (see
 // vendor/), nothing is fetched from a CDN, so caching them once is enough.
-const CACHE_NAME = 'roll-call-v8'; // bumped: old clients would otherwise keep serving cached app.js forever
+const CACHE_NAME = 'roll-call-v9'; // bumped: adds roster-class1.js precache
 const PRECACHE_URLS = [
   './',
   './index.html',
   './app.js',
   './style.css',
   './manifest.json',
+  './roster-class1.js',
   './vendor/html5-qrcode.min.js',
   './vendor/xlsx.full.min.js',
   './icons/icon-192.png',
