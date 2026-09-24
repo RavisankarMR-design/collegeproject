@@ -395,10 +395,19 @@ function addManualEntry() {
   els.manualInput.focus();
 }
 
+// The real college ID has a fixed "2116" prefix in front of the app's 9-digit
+// format (e.g. 240701424 on-screen is actually 2116240701424 on the card) —
+// only the Excel export shows the full ID; live scan/list stays on the bare
+// 9 digits, same split as Project 1's export.
+const COLLEGE_ID_PREFIX = '2116';
+function fullRollNo(rollNo) {
+  return /^\d{9}$/.test(rollNo) ? COLLEGE_ID_PREFIX + rollNo : rollNo;
+}
+
 function exportToExcel() {
   const data = [
     ['Roll No', 'Name', 'Scanned At'],
-    ...rows.map((r) => [r.rollNo, roster.get(r.rollNo) || '', r.scannedAt.toLocaleString()]),
+    ...rows.map((r) => [fullRollNo(r.rollNo), roster.get(r.rollNo) || '', r.scannedAt.toLocaleString()]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!cols'] = [{ wch: 18 }, { wch: 22 }, { wch: 22 }];
@@ -410,7 +419,7 @@ function exportToExcel() {
   if (roster.size > 0) {
     const absentData = [
       ['Roll No', 'Name'],
-      ...[...roster.entries()].filter(([rollNo]) => !seenRollNos.has(rollNo)),
+      ...[...roster.entries()].filter(([rollNo]) => !seenRollNos.has(rollNo)).map(([rollNo, name]) => [fullRollNo(rollNo), name]),
     ];
     const wsAbsent = XLSX.utils.aoa_to_sheet(absentData);
     wsAbsent['!cols'] = [{ wch: 18 }, { wch: 22 }];
