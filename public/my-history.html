@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My Attendance</title>
+<link rel="stylesheet" href="style.css" />
+<script src="auth-client.js"></script>
+</head>
+<body>
+  <h1>My attendance</h1>
+  <p class="subtitle">Every session you've been marked present for, most recent first — your own self-check, no need to ask staff.</p>
+
+  <div class="card">
+    <ul id="history-list" class="list"><li class="empty">Loading...</li></ul>
+  </div>
+
+  <p class="footer-note"><a href="student.html" style="color:var(--text-dim);">← Back to scan</a></p>
+
+  <script>
+    const auth = requireSignedIn();
+    // Staff/admin don't have a self-scan history in the normal sense — send
+    // them to the page that's actually useful for their role instead of a
+    // page that will just say "nothing yet."
+    if (auth && auth.role === 'staff') location.href = 'teacher.html';
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+
+    async function loadHistory() {
+      const ul = document.getElementById('history-list');
+      let records;
+      try {
+        records = await authFetch('/api/students/me/attendance').then((r) => r.json());
+      } catch (err) {
+        ul.innerHTML = `<li class="empty">${esc(err.message)}</li>`;
+        return;
+      }
+
+      if (!Array.isArray(records) || records.length === 0) {
+        ul.innerHTML = '<li class="empty">No attendance marked yet.</li>';
+        return;
+      }
+
+      ul.innerHTML = records.map((r) => `
+        <li>
+          <span class="who">${esc(r.subject)}
+            <span class="badge neutral">${Math.round(r.distanceMeters)}m${r.accuracyMeters != null ? ` ±${Math.round(r.accuracyMeters)}m` : ''}</span>
+            ${r.borderline ? '<span class="badge warn">borderline</span>' : ''}
+          </span>
+          <span class="when">${new Date(r.markedAt).toLocaleString()}</span>
+        </li>`).join('');
+    }
+
+    if (auth && auth.role !== 'staff') loadHistory();
+  </script>
+</body>
+</html>

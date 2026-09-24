@@ -568,6 +568,53 @@ t('admin: test scans never occupy a real roll/device or skip-block real students
   eq(await mark(real, s2), 201);
 });
 
+// ---------- SELF-SERVICE ATTENDANCE HISTORY ----------
+t('history: never-scanned student gets an empty list, not an error', async () => {
+  const st = await newStudent();
+  const r = await api('GET', '/api/students/me/attendance', { token: st.token });
+  eq(r, 200);
+  assert.deepStrictEqual(r.body, []);
+});
+t('history: requires a signed-in student token', async () => {
+  eq(await api('GET', '/api/students/me/attendance'), 401, 'no token');
+  eq(await api('GET', '/api/students/me/attendance', { token: staff1 }), 403, 'staff token');
+});
+t('history: shows exactly this student\'s own marks, correct fields, never another student\'s or the device id', async () => {
+  const a = await newStudent(); const b = await newStudent();
+  const s1 = await mkSession(staff1, { subject: 'History Subject A' });
+  const s2 = await mkSession(staff1, { subject: 'History Subject B' });
+  eq(await mark(a, s1), 201);
+  eq(await mark(b, s2), 201);
+
+  const ra = await api('GET', '/api/students/me/attendance', { token: a.token });
+  eq(ra, 200);
+  assert.strictEqual(ra.body.length, 1, 'student A should see exactly their own one record');
+  assert.strictEqual(ra.body[0].subject, 'History Subject A');
+  assert.ok(!/deviceId|lat|lng/i.test(ra.text), 'history response leaks device/raw GPS fields');
+  assert.ok(!ra.text.includes(a.device), 'history response leaks the device id value');
+
+  const rb = await api('GET', '/api/students/me/attendance', { token: b.token });
+  assert.strictEqual(rb.body.length, 1, 'student B should see exactly their own one record, not A\'s');
+  assert.strictEqual(rb.body[0].subject, 'History Subject B');
+});
+t('history: multiple sessions come back newest-first', async () => {
+  const st = await newStudent();
+  const s1 = await mkSession(staff1, { subject: 'Older' });
+  eq(await mark(st, s1), 201);
+  await sleep(1100); // markedAt has 1s resolution; force a real ordering gap
+  const s2 = await mkSession(staff1, { subject: 'Newer' });
+  eq(await mark(st, s2), 201);
+
+  const r = await api('GET', '/api/students/me/attendance', { token: st.token });
+  assert.strictEqual(r.body[0].subject, 'Newer');
+  assert.strictEqual(r.body[1].subject, 'Older');
+});
+t('history: admin can hit its own history without crashing (ADMIN-TEST binding)', async () => {
+  const s = await mkSession(admin); const q = await live(s);
+  eq(await api('POST', '/api/attendance/mark', { token: admin, body: { payload: q.payload, rollNo: 'x', lat: LAT, lng: LNG, accuracy: 8, deviceId: 'admin-hist-dev' } }), 201);
+  eq(await api('GET', '/api/students/me/attendance', { token: admin }), 200);
+});
+
 // ---------- STALE REPLAY (waits past the TOKEN_STALE_MS grace in utils/token.js) ----------
 // Window-count tolerance, not wall-clock — windows are aligned to fixed 10s
 // ticks from the epoch (not from capture time), so real tolerance from the

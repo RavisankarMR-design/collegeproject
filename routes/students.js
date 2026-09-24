@@ -2,10 +2,41 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Student = require('../models/Student');
 const Session = require('../models/Session');
+const Attendance = require('../models/Attendance');
 const { requireAuth } = require('../utils/auth');
 const { serverError } = require('../utils/http');
 
 const router = express.Router();
+
+// Self-service — a student's only way to check their own record without
+// asking the teacher. Scoped strictly to req.user.email (the verified
+// identity from their own token), never a param, so there's no way to
+// request anyone else's attendance through this route.
+router.get('/me/attendance', requireAuth('student'), async (req, res) => {
+  try {
+    const student = await Student.findOne({ email: req.user.email });
+    if (!student) return res.json([]); // never scanned yet — an empty history, not an error
+
+    const records = await Attendance.find({ student: student._id })
+      .select('-deviceId -lat -lng') // this device's own fingerprint/raw GPS isn't the student's business either
+      .populate('session', 'subject startTime')
+      .sort({ markedAt: -1 })
+      .limit(200);
+
+    res.json(records
+      .filter((r) => r.session) // a since-deleted session shouldn't crash the whole list
+      .map((r) => ({
+        subject: r.session.subject,
+        sessionDate: r.session.startTime,
+        markedAt: r.markedAt,
+        distanceMeters: r.distanceMeters,
+        accuracyMeters: r.accuracyMeters,
+        borderline: r.borderline,
+      })));
+  } catch (err) {
+    serverError(res, err);
+  }
+});
 
 // A staff account must say which of ITS OWN sessions it is acting from (the
 // flagged-list buttons in teacher.html do) — one staff account can't reach
