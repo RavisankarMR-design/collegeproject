@@ -275,6 +275,14 @@ function onDecoded(decodedText) {
   }
   lastDecoded = { text: rollNo, at: now };
 
+  // A stray reflection, a logo, or a barcode-like pattern elsewhere on the
+  // card can misdecode into garbage digits — reject anything that isn't a
+  // real roll number instead of silently adding it to the list.
+  if (!ROLL_NO_RE.test(rollNo)) {
+    setStatus(`Scanned "${rollNo}" doesn't look like a roll number — ignored.`, 'err');
+    return;
+  }
+
   if (seenRollNos.has(rollNo)) {
     dupeCount++;
     dupeLog.push({ rollNo, at: new Date() });
