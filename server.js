@@ -50,13 +50,26 @@ app.use(express.json({ limit: '20kb' }));
 app.use(express.static(path.join(__dirname, 'public'), {
   // HTML must always be revalidated — it's what carries this deploy's actual
   // logic (browser gate, roll format, etc); serving a stale cached copy after
-  // a fix ships would silently undo it. JS/CSS/vendored libraries only change
-  // when we push a new deploy, so on a weak connection there's no reason to
-  // make every visit re-fetch (or even re-validate) them over the network —
-  // cache them for a day and let the browser skip the round-trip entirely.
+  // a fix ships would silently undo it.
+  //
+  // /vendor/ files are third-party libraries we pin and never edit in place —
+  // when html5-qrcode or qrcode.js needs an update, that's a new filename
+  // (e.g. html5-qrcode-2.3.9.min.js) with the HTML changed to match, not an
+  // in-place overwrite. Since HTML is never cached, the browser asks for the
+  // new filename immediately either way — so these can cache for a full year
+  // with zero staleness risk, which is the actual fix for "after a day it's
+  // slow again": a returning student's phone never re-fetches this ~375KB
+  // file at all after the very first visit, for the rest of the term.
+  //
+  // Our OWN first-party scripts (auth-client.js, geo-filter.js, style.css)
+  // are different — we edit those in place as fixes ship (same filename),
+  // so they keep a short cache instead of risking a phone running stale
+  // logic for a year after a real fix.
   setHeaders: (res, filePath) => {
-    if (/\.(html)$/i.test(filePath)) {
+    if (/\.html$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'no-cache');
+    } else if (filePath.includes(`${path.sep}vendor${path.sep}`)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     } else {
       res.setHeader('Cache-Control', 'public, max-age=86400');
     }
