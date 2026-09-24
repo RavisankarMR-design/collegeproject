@@ -230,6 +230,17 @@ router.get('/:id/attendance', async (req, res) => {
   }
 });
 
+// Students only ever type/scan the last 9 digits (24 + 7 digits) of their
+// real college ID — the full official roll number has a fixed "2116"
+// college-code prefix in front that's never entered anywhere in the app.
+// Only the export needs the full number; live scanning/display stays on the
+// 9-digit tail (see routes/attendance.js) — this exists here, not there, so
+// it can't accidentally affect matching/validation.
+const COLLEGE_ID_PREFIX = '2116';
+function fullRollNo(rollNo) {
+  return /^\d{9}$/.test(rollNo) ? COLLEGE_ID_PREFIX + rollNo : rollNo; // leave ADMIN-* / non-standard values as-is
+}
+
 // Shared by the CSV and Excel exports below — deviceId is deliberately left
 // out, it's a fingerprint hash the teacher has no use for.
 async function loadExportRows(sessionId) {
@@ -243,7 +254,7 @@ async function loadExportRows(sessionId) {
   const rows = [
     ['Roll No', 'Name', 'Marked At', 'Distance (m)', 'GPS Accuracy (m)', 'Borderline'],
     ...records.map((r) => [
-      safeCell(r.student ? r.student.rollNo : ''),
+      safeCell(r.student ? fullRollNo(r.student.rollNo) : ''),
       safeCell(r.student ? r.student.name : ''),
       new Date(r.markedAt).toISOString(),
       Math.round(r.distanceMeters),

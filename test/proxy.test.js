@@ -544,6 +544,22 @@ t('abuse: XSS payloads in stored data are escaped in exports', async () => {
   const r = await api('GET', `/api/sessions/${s.id}/export.xls`, { token: staff1 });
   assert.ok(!r.text.includes('<img'), 'raw HTML in xls');
 });
+t('export: real roll numbers get the college-code prefix, live scan/mark stays on the bare 9 digits', async () => {
+  const st = await newStudent(); const s = await mkSession(staff1);
+  eq(await mark(st, s), 201);
+  const csv = await api('GET', `/api/sessions/${s.id}/export.csv`, { token: staff1 });
+  assert.ok(csv.text.includes(`2116${st.roll}`), `expected 2116-prefixed roll in CSV, got: ${csv.text}`);
+  assert.ok(!csv.text.includes(`,${st.roll},`), `bare 9-digit roll should not appear un-prefixed: ${csv.text}`);
+  // the live attendance list (what teacher.html actually renders during class) is untouched
+  const live = await api('GET', `/api/sessions/${s.id}/attendance?code=${s.code}`);
+  assert.strictEqual(live.body[0].student.rollNo, st.roll, 'live attendance list should stay on the bare 9-digit roll');
+});
+t('export: admin\'s namespaced roll is left alone, not prefixed into nonsense', async () => {
+  const s = await mkSession(admin); const q = await live(s);
+  await api('POST', '/api/attendance/mark', { token: admin, body: { payload: q.payload, rollNo: 'x', lat: LAT, lng: LNG, accuracy: 8, deviceId: 'export-admin-dev' } });
+  const csv = await api('GET', `/api/sessions/${s.id}/export.csv`, { token: admin });
+  assert.ok(!csv.text.includes('2116ADMIN'), `admin's ADMIN-* roll got wrongly prefixed: ${csv.text}`);
+});
 
 // ---------- RATE LIMITS ----------
 t('rate: a whole class on one IP (25 different accounts) is not throttled', async () => {
