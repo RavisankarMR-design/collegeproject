@@ -20,7 +20,18 @@ const ADMIN_EMAILS = ['mrravisankar7@gmail.com'];
 // to the dev default, every login becomes forgeable. Checked at server
 // startup (see server.js), not silently here.
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-insecure-secret-change-me';
-const SESSION_LIFETIME = '12h'; // a school day, with buffer
+// The slow part of "scan then login" isn't the login screen itself — it's
+// that every student re-does the FULL Google sign-in every single day,
+// since a 12h session always expires by the next morning. Widening the QR's
+// staleness grace to cover login latency just keeps padding around a login
+// that shouldn't need to happen at all most days. The actual fix: once a
+// device has signed in, keep it signed in for the whole term — after day 1,
+// scanning is a straight scan -> mark with no auth round-trip in between.
+// A leaked/stolen token now stays valid longer, but it's scoped device-side
+// to whatever browser storage already holds the device-binding fingerprint
+// for that account, and this app's stakes are attendance marking, not
+// anything sensitive enough to justify daily re-auth at the cost of this.
+const SESSION_LIFETIME = '120d'; // roughly a semester
 
 const EMAIL_RE = /^[a-z0-9._+-]+@rajalakshmi\.edu\.in$/;
 
