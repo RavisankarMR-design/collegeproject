@@ -26,10 +26,14 @@ body {
   font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
   max-width: 560px;
   margin: 0 auto;
-  padding: 20px 16px 48px;
   background: var(--bg);
   color: var(--text);
   line-height: 1.4;
+  /* env(safe-area-inset-*) keeps content clear of the iPhone notch/home
+     indicator if this is ever installed as a standalone app (viewport-fit=cover
+     opts into drawing under them in the first place). Falls back to the
+     original 20px/16px/48px padding on devices/browsers without a notch. */
+  padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 }
 
 h1 { font-size: 1.4rem; margin: 0 0 4px; }
