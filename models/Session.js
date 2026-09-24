@@ -23,6 +23,12 @@ const SessionSchema = new mongoose.Schema({
   // (open mode). Non-empty = only these roll numbers can be marked present,
   // so a class of 30 can never end up with 31 attendance records.
   roster: { type: [String], default: [] },
+  // Opt-in per session — when true, exports look up real names from the
+  // trial class's roster (data/class1-roster.json) instead of the
+  // account-derived name. Off by default: without this, a roll number that
+  // happens to coincidentally match that roster (a different class, a demo)
+  // must never get someone else's real name substituted in.
+  useClassRoster: { type: Boolean, default: false },
 });
 
 module.exports = mongoose.model('Session', SessionSchema);

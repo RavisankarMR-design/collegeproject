@@ -11,6 +11,26 @@ const { serverError, isNum } = require('../utils/http');
 
 const router = express.Router();
 
+// Real class roster for the current trial (roll -> real name), so exports show
+// the actual name from the college's own register instead of whatever a
+// student's Google account happens to display (often just the email's first
+// segment, e.g. "Prefixcheck" instead of "Prefix Check"). Keyed by the same
+// 9-digit format students scan with (see routes/attendance.js ROLL_NO_RE) —
+// the roster's own "2116" college-code prefix (see fullRollNo below) is
+// stripped ahead of time when this file was generated. A roll not in here
+// (a different class, a test account) just falls back to the account name,
+// so this never breaks exports for anyone outside this one trial roster.
+const CLASS_ROSTER = require('../data/class1-roster.json');
+
+// Only looks the roll up in the roster when the session explicitly opted in
+// (session.useClassRoster) — without that, a roll number that happens to
+// coincidentally match this roster (a different class entirely) must never
+// get someone else's real name substituted into an unrelated session's export.
+function realName(student, useRoster) {
+  const rosterName = useRoster && student && CLASS_ROSTER[student.rollNo];
+  return rosterName || (student ? student.name : '');
+}
+
 // What a caller has to prove to see a session's live data (see utils/access.js).
 const creds = (req) => ({ code: req.query.code, token: bearer(req) });
 
@@ -51,6 +71,7 @@ function fullSummary(session) {
     active: session.active,
     rosterSize: session.roster.length,
     displayCode: session.displayCode,
+    useClassRoster: session.useClassRoster,
   };
 }
 
@@ -93,7 +114,7 @@ router.post('/', requireAuth('staff'), async (req, res) => {
   try {
     const teacherName = req.user.name;
     const teacherEmail = req.user.email;
-    const { subject, lat, lng, radiusMeters, durationMinutes, roster } = req.body;
+    const { subject, lat, lng, radiusMeters, durationMinutes, roster, useClassRoster } = req.body;
     const bad = (msg) => res.status(400).json({ error: msg });
 
     if (typeof subject !== 'string' || !subject.trim() || subject.length > 100) return bad('A subject (up to 100 characters) is required.');
@@ -122,6 +143,7 @@ router.post('/', requireAuth('staff'), async (req, res) => {
           classroom: { lat, lng, radiusMeters: radiusMeters || 30 },
           endTime: new Date(Date.now() + durationMinutes * 60000),
           roster: normalizedRoster,
+          useClassRoster: useClassRoster === true,
           displayCode: generateDisplayCode(),
         });
       } catch (err) {
@@ -255,7 +277,7 @@ async function loadExportRows(sessionId) {
     ['Roll No', 'Name', 'Marked At', 'Distance (m)', 'GPS Accuracy (m)', 'Borderline'],
     ...records.map((r) => [
       safeCell(r.student ? fullRollNo(r.student.rollNo) : ''),
-      safeCell(r.student ? r.student.name : ''),
+      safeCell(realName(r.student, session.useClassRoster)),
       new Date(r.markedAt).toISOString(),
       Math.round(r.distanceMeters),
       r.accuracyMeters == null ? '' : Math.round(r.accuracyMeters),

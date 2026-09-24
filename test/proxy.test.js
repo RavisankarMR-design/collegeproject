@@ -560,6 +560,42 @@ t('export: admin\'s namespaced roll is left alone, not prefixed into nonsense', 
   const csv = await api('GET', `/api/sessions/${s.id}/export.csv`, { token: admin });
   assert.ok(!csv.text.includes('2116ADMIN'), `admin's ADMIN-* roll got wrongly prefixed: ${csv.text}`);
 });
+t('export: a roll number in the real class roster gets its actual name, overriding whatever the Google account displays', async () => {
+  const s = await mkSession(staff1, { useClassRoster: true }); const q = await live(s);
+  // an account whose derived display name is obviously NOT the roster's real name
+  const st = await newStudent('rosterreal');
+  st.roll = '240701002'; // real roster entry: "Aakash R" (data/class1-roster.json)
+  const accountName = jwt.decode(st.token).name;
+  eq(await mark(st, s), 201);
+
+  const csv = await api('GET', `/api/sessions/${s.id}/export.csv`, { token: staff1 });
+  assert.ok(csv.text.includes('Aakash R'), `expected the real roster name in the export: ${csv.text}`);
+  assert.ok(!csv.text.includes(accountName), `account-derived name "${accountName}" leaked into the export instead of the roster name: ${csv.text}`);
+
+  // the live list (what the teacher's screen actually shows during class) is untouched
+  const liveList = await api('GET', `/api/sessions/${s.id}/attendance?code=${s.code}`);
+  assert.strictEqual(liveList.body[0].student.name, accountName, 'live list should keep showing the account-derived name, not the roster name');
+});
+t('export: a roll NOT in the class roster still falls back to the account-derived name', async () => {
+  const st = await newStudent(); const s = await mkSession(staff1); // random generated roll, not in the roster
+  const accountName = jwt.decode(st.token).name;
+  eq(await mark(st, s), 201);
+  const csv = await api('GET', `/api/sessions/${s.id}/export.csv`, { token: staff1 });
+  assert.ok(csv.text.includes(accountName), `expected fallback to account name for a non-roster roll: ${csv.text}`);
+});
+
+t('export: a session that did NOT opt into the class roster never substitutes a roster name, even for a roll that IS in the roster', async () => {
+  const s = await mkSession(staff1); // useClassRoster left false (default)
+  const st = await newStudent('rosternotopted');
+  // high offset (901), far outside the counter range auto-generated test rolls
+  // ever reach, so this can't collide with some unrelated test's own roll.
+  st.roll = '240701901'; // real roster entry: "Lokeshwar M" (data/class1-roster.json)
+  const accountName = jwt.decode(st.token).name;
+  eq(await mark(st, s), 201);
+  const csv = await api('GET', `/api/sessions/${s.id}/export.csv`, { token: staff1 });
+  assert.ok(csv.text.includes(accountName), `expected account name, not roster name, in an opted-out session: ${csv.text}`);
+  assert.ok(!csv.text.includes('Lokeshwar M'), `roster name leaked into an unopted-in session's export: ${csv.text}`);
+});
 
 // ---------- RATE LIMITS ----------
 t('rate: a whole class on one IP (25 different accounts) is not throttled', async () => {

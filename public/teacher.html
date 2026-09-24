@@ -42,6 +42,11 @@
     <label for="roster">Enrolled roll numbers (optional)</label>
     <textarea id="roster" placeholder="One per line or comma-separated, e.g.&#10;21CS001, 21CS002, 21CS003&#10;&#10;Leave blank to accept any roll number."></textarea>
 
+    <label style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+      <input type="checkbox" id="use-class-roster" style="width:auto;" />
+      <span style="font-size:.85rem; color:var(--text-dim);">This is Trial Class 1 — auto-fill real names from the class roster in the export</span>
+    </label>
+
     <button id="capture-loc" class="secondary">📍 Capture classroom location — stand in the room, then tap</button>
     <div id="loc-status" class="msg info" style="display:none;"></div>
 
@@ -266,13 +271,14 @@
       const durationMinutes = Number(document.getElementById('duration').value) || 55;
       const roster = document.getElementById('roster').value
         .split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+      const useClassRoster = document.getElementById('use-class-roster').checked;
 
       if (!subject) { alert('Subject is required'); return; }
 
       const res = await authFetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, lat, lng, radiusMeters, durationMinutes, roster }),
+        body: JSON.stringify({ subject, lat, lng, radiusMeters, durationMinutes, roster, useClassRoster }),
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error); return; }
