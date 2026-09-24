@@ -6,6 +6,7 @@ const READER_ID = 'reader';
 const DUPLICATE_COOLDOWN_MS = 1500; // ignore the same code re-firing while still in frame
 const STORAGE_KEY = 'rollcall_state_v1';
 const ROSTER_KEY = 'rollcall_roster_v1';
+const TRIAL_ACTIVE_KEY = 'rollcall_trial_active_v1';
 // Roll numbers are always "24" + 7 digits (e.g. 240701424) — only the first
 // two digits are fixed, the other 7 vary per year/department/student. Only
 // enforced on manual/edited entries: a real scanned barcode is trusted
@@ -21,6 +22,12 @@ let dupeCount = 0;
 const dupeLog = []; // { rollNo, at: Date } — which roll numbers actually got flagged, not just a bare count
 let lastDecoded = { text: null, at: 0 };
 const roster = new Map(); // rollNo -> name, loaded separately from the scan session (see ROSTER_KEY)
+// True only when the Trial Class 1 roster was explicitly loaded — while true,
+// a roll number not on that roster is rejected outright (this is a real,
+// known class, so an unrelated ID shouldn't end up in its roll call). A
+// custom pasted roster does NOT set this — it stays name-only/no-blocking,
+// same as before, since that's typed by the teacher and may be incomplete.
+let trialActive = false;
 
 // Everything lived only in a JS variable — a reload, an accidentally-closed
 // tab, or the OS killing a backgrounded tab (common on both Android and iOS
@@ -72,6 +79,12 @@ function loadRoster() {
       if (typeof rollNo === 'string') roster.set(rollNo, typeof name === 'string' ? name : '');
     }
   } catch { /* corrupt/unavailable — start with no roster rather than crash */ }
+}
+function saveTrialActive() {
+  try { localStorage.setItem(TRIAL_ACTIVE_KEY, trialActive ? '1' : ''); } catch { /* not critical */ }
+}
+function loadTrialActive() {
+  try { trialActive = localStorage.getItem(TRIAL_ACTIVE_KEY) === '1'; } catch { trialActive = false; }
 }
 
 const els = {
@@ -240,6 +253,10 @@ function editEntry(idx) {
     alert(`${rollNo} is already in the list.`);
     return;
   }
+  if (trialActive && !roster.has(rollNo)) {
+    alert(`${rollNo} is not on the Trial Class 1 roster.`);
+    return;
+  }
 
   seenRollNos.delete(row.rollNo);
   seenRollNos.add(rollNo);
@@ -264,6 +281,11 @@ function onDecoded(decodedText) {
     setStatus(`Already scanned: ${rollNo}`, 'info');
     saveState();
     renderList();
+    return;
+  }
+
+  if (trialActive && !roster.has(rollNo)) {
+    setStatus(`${rollNo} is not on the Trial Class 1 roster — rejected.`, 'err');
     return;
   }
 
@@ -484,6 +506,7 @@ function loadRosterFromInput() {
   if (lines.length === 0) { setRosterStatus('Paste at least one line first.', 'err'); return; }
 
   roster.clear();
+  trialActive = false; // a custom pasted roster never blocks off-roster scans, only Trial Class 1 does
   let skipped = 0;
   for (const line of lines) {
     const [rawRoll, ...rest] = line.split(',');
@@ -495,6 +518,7 @@ function loadRosterFromInput() {
   if (roster.size === 0) { setRosterStatus('No valid roll numbers found (format: 240 + 6 digits).', 'err'); return; }
 
   saveRoster();
+  saveTrialActive();
   els.rosterClearBtn.style.display = 'block';
   els.rosterInput.value = '';
   setRosterStatus(`Loaded ${roster.size} student${roster.size === 1 ? '' : 's'}.${skipped ? ` (${skipped} line${skipped === 1 ? '' : 's'} skipped — bad format)` : ''}`, 'ok');
@@ -510,18 +534,23 @@ function loadTrialClass1Roster() {
   if (!data) { setRosterStatus('Trial Class 1 roster failed to load.', 'err'); return; }
   roster.clear();
   for (const [rollNo, name] of Object.entries(data)) roster.set(rollNo, name);
+  trialActive = true;
   saveRoster();
+  saveTrialActive();
   els.rosterClearBtn.style.display = 'block';
-  setRosterStatus(`Loaded Trial Class 1 — ${roster.size} students.`, 'ok');
+  setRosterStatus(`Loaded Trial Class 1 — ${roster.size} students. Only these roll numbers can be scanned.`, 'ok');
   renderList();
 }
 
 els.trialRosterBtn.addEventListener('click', loadTrialClass1Roster);
 els.rosterLoadBtn.addEventListener('click', loadRosterFromInput);
 els.rosterClearBtn.addEventListener('click', () => {
-  if (!confirm(`Clear the loaded roster (${roster.size} students)? Already-scanned entries stay, but names/absent-tracking go away.`)) return;
+  const blockNote = trialActive ? ' (roll-number restriction lifted too — any roll can be scanned again)' : '';
+  if (!confirm(`Clear the loaded roster (${roster.size} students)? Already-scanned entries stay, but names/absent-tracking go away${blockNote}.`)) return;
   roster.clear();
+  trialActive = false;
   saveRoster();
+  saveTrialActive();
   els.rosterClearBtn.style.display = 'none';
   setRosterStatus('Roster cleared.', 'info');
   renderList();
@@ -538,9 +567,10 @@ els.rosterToggle.addEventListener('click', (e) => {
 });
 
 loadRoster();
+loadTrialActive();
 if (roster.size > 0) {
   els.rosterClearBtn.style.display = 'block';
-  setRosterStatus(`${roster.size} students loaded from before.`, 'info');
+  setRosterStatus(`${roster.size} students loaded from before.${trialActive ? ' Only these roll numbers can be scanned.' : ''}`, 'info');
   // A roster was already loaded on a previous visit — open the section so
   // "Clear roster" and the count are actually visible, not hidden behind
   // the toggle with no visible sign a roster exists.
