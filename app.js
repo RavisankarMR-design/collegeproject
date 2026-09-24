@@ -158,7 +158,7 @@ function renderList() {
               <span class="roll">${escapeHtml(r.rollNo)}</span>${name ? ` — ${escapeHtml(name)}` : ''}<br/>
               <span class="time">${r.scannedAt.toLocaleTimeString()}</span>
             </span>
-            <span style="display:flex; flex-shrink:0;">
+            <span class="actions">
               <button class="remove" data-action="edit" data-index="${realIndex}" title="Edit">✏️</button>
               <button class="remove" data-action="remove" data-index="${realIndex}" title="Remove">✕</button>
             </span>

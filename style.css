@@ -18,6 +18,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.4;
   max-width: 640px;
   margin: 0 auto;
   /* env(safe-area-inset-*) keeps content clear of the iPhone notch/home
@@ -28,23 +29,67 @@ body {
 }
 
 h1 {
-  font-size: 1.3rem;
-  margin: 4px 0 2px;
+  font-size: 1.4rem;
+  margin: 6px 0 4px;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: 1rem;
+  margin: 0;
+  font-weight: 700;
+}
+
+label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 6px;
 }
 
 .subtitle {
   color: var(--text-dim);
   font-size: 0.85rem;
-  margin: 0 0 16px;
+  margin: 0 0 18px;
+}
+
+/* Small uppercase section label above a card's content — breaks up a page
+   of otherwise-identical gray boxes so each card reads as its own step. */
+.eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 12px;
 }
 
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 16px;
-  margin-bottom: 14px;
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
 }
+
+.field {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+.field:focus { outline: none; border-color: var(--accent); }
+textarea.field { resize: vertical; }
+
+.btn-auto { width: auto; margin-top: 0; }
+.btn-sm { padding: 8px 14px; font-size: 0.85rem; }
 
 #reader {
   width: 100%;
@@ -109,13 +154,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 4px;
+  gap: 8px;
+  padding: 12px 4px;
   border-bottom: 1px solid var(--border);
   font-size: 0.92rem;
 }
 .list li:last-child { border-bottom: none; }
 .list li .roll { font-weight: 600; }
-.list li .time { color: var(--text-dim); font-size: 0.78rem; }
+.list li .time { color: var(--text-dim); font-size: 0.78rem; margin-top: 1px; }
+.list li .actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .list li .remove {
   background: none;
   border: none;

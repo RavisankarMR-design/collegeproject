@@ -22,16 +22,14 @@
   <p class="subtitle">Scan each student's ID card barcode. It keeps scanning — the list builds itself. Export to Excel when done. Works fully offline once loaded.</p>
 
   <div class="card">
-    <p class="footer-note" style="margin:0;">
+    <p class="footer-note" style="margin:0; text-align:left;">
       <a href="#" id="roster-toggle">Have a class roster? Tap to add names + absent tracking</a>
     </p>
-    <div id="roster-section" style="display:none; margin-top:10px;">
-      <p class="subtitle" style="margin:0 0 6px;">
-        <button id="trial-roster-btn" class="secondary" style="width:auto; margin-top:0; padding:6px 12px; font-size:.85rem;">Use Trial Class 1 roster (140 students)</button>
-      </p>
-      <p class="subtitle" style="margin:0 0 10px;">Or paste your own: roll numbers with names to show names while scanning and track who's absent. One per line: roll number, comma, name. Skip this entirely to just scan plain roll numbers.</p>
-      <textarea id="roster-input" rows="3" placeholder="240701424, Ravisankar&#10;240701425, Priya&#10;..." style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.9rem; font-family:inherit; resize:vertical;"></textarea>
-      <div class="row" style="margin-top:8px;">
+    <div id="roster-section" style="display:none; margin-top:14px;">
+      <button id="trial-roster-btn" class="secondary btn-auto btn-sm">Use Trial Class 1 roster (140 students)</button>
+      <p class="subtitle" style="margin:12px 0 10px;">Or paste your own — one per line: roll number, comma, name. Skip this to just scan plain roll numbers.</p>
+      <textarea id="roster-input" class="field" rows="3" placeholder="240701424, Ravisankar&#10;240701425, Priya&#10;..."></textarea>
+      <div class="row" style="margin-top:10px;">
         <button id="roster-load-btn" class="secondary">Load roster</button>
         <button id="roster-clear-btn" class="secondary" style="display:none;">Clear roster</button>
       </div>
@@ -40,24 +38,26 @@
   </div>
 
   <div class="card">
+    <p class="eyebrow">Scan</p>
     <div id="reader"></div>
     <div class="row">
       <button id="start-btn" class="primary">📷 Start scanning</button>
       <button id="stop-btn" class="secondary" style="display:none;">⏹ Stop</button>
-      <button id="torch-btn" class="secondary" style="display:none; flex:0 0 auto; width:auto;">🔦</button>
+      <button id="torch-btn" class="secondary btn-auto" style="display:none; flex:0 0 auto;">🔦</button>
     </div>
     <div id="scan-status" class="status"></div>
 
-    <p class="footer-note" style="margin:10px 0 0;">
+    <p class="footer-note" style="margin:12px 0 0;">
       <a href="#" id="manual-toggle">Can't scan a barcode? Enter it manually</a>
     </p>
-    <div id="manual-entry" class="row" style="display:none; margin-top:8px;">
-      <input type="text" id="manual-input" placeholder="e.g. 240701424" inputmode="numeric" maxlength="9" style="flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.95rem;" />
-      <button id="manual-add-btn" class="secondary" style="flex:0 0 auto; width:auto; margin-top:0;">Add</button>
+    <div id="manual-entry" class="row" style="display:none; margin-top:10px;">
+      <input type="text" id="manual-input" class="field" placeholder="e.g. 240701424" inputmode="numeric" maxlength="9" style="flex:1;" />
+      <button id="manual-add-btn" class="secondary btn-auto" style="flex:0 0 auto;">Add</button>
     </div>
   </div>
 
   <div class="card">
+    <p class="eyebrow">Session</p>
     <div class="stat-row">
       <div class="stat">
         <div class="num" id="count">0</div>
@@ -68,29 +68,26 @@
         <div class="label">Repeats ignored</div>
       </div>
     </div>
-    <p class="footer-note" style="margin:10px 0 0;">
+    <p class="footer-note" style="margin:12px 0 0;">
       <a href="#" id="dupe-toggle">View repeats</a>
     </p>
-    <ul id="dupe-list" class="list" style="display:none; margin-top:8px;"></ul>
+    <ul id="dupe-list" class="list" style="display:none; margin-top:10px;"></ul>
   </div>
 
   <div class="card">
-    <div class="row" style="margin-bottom:10px;">
-      <h2 style="margin:0; flex:1;">Roll list</h2>
-    </div>
+    <h2 style="margin-bottom:12px;">Roll list</h2>
     <ul id="roll-list" class="list"><li class="empty">No scans yet.</li></ul>
   </div>
 
   <div class="card" id="absent-card" style="display:none;">
-    <div class="row" style="margin-bottom:10px;">
-      <h2 style="margin:0; flex:1;">Absent (<span id="absent-count">0</span>)</h2>
-    </div>
+    <h2 style="margin-bottom:12px;">Absent (<span id="absent-count">0</span>)</h2>
     <ul id="absent-list" class="list"></ul>
   </div>
 
   <div class="card">
+    <p class="eyebrow">Export</p>
     <label for="export-filename">File name (optional)</label>
-    <input type="text" id="export-filename" placeholder="e.g. RollCall_2026-09-24" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.95rem; margin-bottom:8px;" />
+    <input type="text" id="export-filename" class="field" placeholder="e.g. RollCall_2026-09-24" style="margin-bottom:10px;" />
     <button id="export-btn" class="primary" disabled>⬇ Export to Excel (.xlsx)</button>
     <button id="clear-btn" class="danger" disabled>🗑 Clear list</button>
   </div>
