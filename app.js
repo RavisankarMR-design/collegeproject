@@ -8,10 +8,8 @@ const STORAGE_KEY = 'rollcall_state_v1';
 const ROSTER_KEY = 'rollcall_roster_v1';
 const TRIAL_ACTIVE_KEY = 'rollcall_trial_active_v1';
 // Roll numbers are always "24" + 7 digits (e.g. 240701424) — only the first
-// two digits are fixed, the other 7 vary per year/department/student. Only
-// enforced on manual/edited entries: a real scanned barcode is trusted
-// as-is, since forcing this pattern on it could reject a genuine card over
-// a benign encoding difference.
+// two digits are fixed, the other 7 vary per year/department/student.
+// Applied to scans too, so a misread barcode can't land in the list.
 const ROLL_NO_RE = /^24\d{7}$/;
 
 let scanner = null;
@@ -126,20 +124,23 @@ function clearStatus() {
   els.status.className = 'status';
 }
 
-function beep() {
+// Defaults are the short high "added" beep; a rejection uses a long low
+// tone + double buzz so a student scanning on a passed phone notices it
+// without reading the status text.
+function beep(freq = 880, secs = 0.08, vibration = 60) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.frequency.value = 880;
+    osc.frequency.value = freq;
     gain.gain.setValueAtTime(0.15, ctx.currentTime);
     osc.start();
-    osc.stop(ctx.currentTime + 0.08);
+    osc.stop(ctx.currentTime + secs);
     osc.onended = () => ctx.close();
   } catch { /* audio not available — silent is fine, not critical */ }
-  if (navigator.vibrate) navigator.vibrate(60);
+  if (navigator.vibrate) navigator.vibrate(vibration);
 }
 
 function renderList() {
@@ -293,6 +294,7 @@ function onDecoded(decodedText) {
   }
 
   if (trialActive && !roster.has(rollNo)) {
+    beep(220, 0.3, [80, 60, 80]);
     setStatus(`${rollNo} is not on the Trial Class 1 roster — rejected.`, 'err');
     return;
   }
@@ -300,7 +302,8 @@ function onDecoded(decodedText) {
   seenRollNos.add(rollNo);
   rows.push({ rollNo, scannedAt: new Date() });
   beep();
-  setStatus(`Added: ${rollNo}`, 'ok');
+  const name = roster.get(rollNo);
+  setStatus(`Added: ${rollNo}${name ? ` — ${name}` : ''}`, 'ok');
   saveState();
   renderList();
 }
@@ -523,7 +526,7 @@ function loadRosterFromInput() {
     roster.set(rollNo, rest.join(',').trim());
   }
 
-  if (roster.size === 0) { setRosterStatus('No valid roll numbers found (format: 240 + 6 digits).', 'err'); return; }
+  if (roster.size === 0) { setRosterStatus('No valid roll numbers found (format: 24 + 7 digits).', 'err'); return; }
 
   saveRoster();
   saveTrialActive();
@@ -576,6 +579,7 @@ els.rosterToggle.addEventListener('click', (e) => {
 
 loadRoster();
 loadTrialActive();
+if (roster.size === 0) trialActive = false; // a lost roster must not leave every scan blocked
 if (roster.size > 0) {
   els.rosterClearBtn.style.display = 'block';
   setRosterStatus(`${roster.size} students loaded from before.${trialActive ? ' Only these roll numbers can be scanned.' : ''}`, 'info');
