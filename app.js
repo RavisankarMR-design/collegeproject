@@ -577,6 +577,90 @@ els.rosterToggle.addEventListener('click', (e) => {
   e.target.textContent = isHidden ? 'Hide class roster' : "Have a class roster? Tap to add names + absent tracking";
 });
 
+// --- Locked scan mode -------------------------------------------------------
+// Staff phone gets passed to students: while locked, CSS hides everything but
+// the camera + scan notifications, and only a staff PIN unlocks. This cannot
+// stop someone leaving the page (a web page can't) — Android app pinning /
+// iOS Guided Access does that; this just makes every in-page control unreachable.
+// PIN is a hash in localStorage: keeps out students poking buttons, not
+// someone with dev tools / cleared site data (clearing site data also resets it).
+const LOCK_KEY = 'rollcall_locked_v1';
+const PIN_KEY = 'rollcall_pin_v1';
+const PIN_RE = /^\d{4,6}$/;
+const lockEls = {
+  btn: document.getElementById('lock-btn'),
+  panel: document.getElementById('pin-panel'),
+  label: document.getElementById('pin-label'),
+  input: document.getElementById('pin-input'),
+  ok: document.getElementById('pin-ok'),
+  cancel: document.getElementById('pin-cancel'),
+  status: document.getElementById('pin-status'),
+};
+let pinMode = null; // 'set' | 'unlock'
+let pinFails = 0;
+let pinBlockedUntil = 0;
+
+async function hashPin(pin) {
+  if (!(window.crypto && crypto.subtle)) return 'p:' + pin; // insecure context: plain fallback
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('rollcall:' + pin));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+function isLocked() { return document.body.classList.contains('locked'); }
+function applyLock(on) {
+  document.body.classList.toggle('locked', on);
+  try { localStorage.setItem(LOCK_KEY, on ? '1' : ''); } catch { /* not critical */ }
+  lockEls.btn.textContent = on ? '🔓 Unlock (staff PIN)' : '🔒 Lock for students';
+  closePinPanel();
+}
+function openPinPanel(mode) {
+  pinMode = mode;
+  lockEls.label.textContent = mode === 'set' ? 'Set a staff PIN (4–6 digits)' : 'Staff PIN';
+  lockEls.status.className = 'status';
+  lockEls.input.value = '';
+  lockEls.panel.style.display = 'block';
+  lockEls.btn.style.display = 'none';
+  lockEls.input.focus();
+}
+function closePinPanel() {
+  pinMode = null;
+  lockEls.panel.style.display = 'none';
+  lockEls.btn.style.display = 'block';
+}
+function pinError(text) {
+  lockEls.status.textContent = text;
+  lockEls.status.className = 'status show err';
+  lockEls.input.value = '';
+}
+async function submitPin() {
+  const pin = lockEls.input.value.trim();
+  if (!PIN_RE.test(pin)) { pinError('PIN must be 4–6 digits.'); return; }
+  if (pinMode === 'set') {
+    try { localStorage.setItem(PIN_KEY, await hashPin(pin)); } catch { pinError('Could not save PIN.'); return; }
+    applyLock(true);
+    return;
+  }
+  if (Date.now() < pinBlockedUntil) { pinError('Too many wrong tries — wait a few seconds.'); return; }
+  let stored = null;
+  try { stored = localStorage.getItem(PIN_KEY); } catch { /* treated as no PIN below */ }
+  if (!stored || (await hashPin(pin)) === stored) {
+    pinFails = 0;
+    applyLock(false);
+    return;
+  }
+  if (++pinFails >= 5) { pinFails = 0; pinBlockedUntil = Date.now() + 30000; pinError('Too many wrong tries — wait 30 seconds.'); return; }
+  pinError('Wrong PIN.');
+}
+lockEls.btn.addEventListener('click', () => {
+  if (isLocked()) { openPinPanel('unlock'); return; }
+  let hasPin = false;
+  try { hasPin = !!localStorage.getItem(PIN_KEY); } catch { /* no storage: ask to set, will fail visibly */ }
+  if (hasPin) applyLock(true); else openPinPanel('set');
+});
+lockEls.ok.addEventListener('click', submitPin);
+lockEls.cancel.addEventListener('click', closePinPanel);
+lockEls.input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitPin(); });
+try { if (localStorage.getItem(LOCK_KEY) === '1') applyLock(true); } catch { /* start unlocked */ }
+
 loadRoster();
 loadTrialActive();
 if (roster.size === 0) trialActive = false; // a lost roster must not leave every scan blocked

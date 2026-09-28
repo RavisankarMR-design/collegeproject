@@ -18,10 +18,10 @@
 <script src="roster-class1.js"></script>
 </head>
 <body>
-  <h1>ID Barcode Roll Call</h1>
-  <p class="subtitle">Scan each student's ID card barcode. It keeps scanning — the list builds itself. Export to Excel when done. Works fully offline once loaded.</p>
+  <h1 class="lockable">ID Barcode Roll Call</h1>
+  <p class="subtitle lockable">Scan each student's ID card barcode. It keeps scanning — the list builds itself. Export to Excel when done. Works fully offline once loaded.</p>
 
-  <div class="card">
+  <div class="card lockable">
     <p class="footer-note" style="margin:0; text-align:left;">
       <a href="#" id="roster-toggle">Have a class roster? Tap to add names + absent tracking</a>
     </p>
@@ -38,25 +38,37 @@
   </div>
 
   <div class="card">
-    <p class="eyebrow">Scan</p>
+    <p id="lock-banner" class="lock-banner">🔒 Scan mode — hold your ID card to the camera until you hear the beep. Don't touch the screen.</p>
+    <p class="eyebrow lockable">Scan</p>
     <div id="reader"></div>
     <div class="row">
       <button id="start-btn" class="primary">📷 Start scanning</button>
-      <button id="stop-btn" class="secondary" style="display:none;">⏹ Stop</button>
+      <button id="stop-btn" class="secondary lockable" style="display:none;">⏹ Stop</button>
       <button id="torch-btn" class="secondary btn-auto" style="display:none; flex:0 0 auto;">🔦</button>
     </div>
     <div id="scan-status" class="status"></div>
 
-    <p class="footer-note" style="margin:12px 0 0;">
+    <button id="lock-btn" class="secondary">🔒 Lock for students</button>
+    <div id="pin-panel" class="pin-panel" style="display:none;">
+      <label for="pin-input" id="pin-label">Staff PIN</label>
+      <input type="password" id="pin-input" class="field" inputmode="numeric" maxlength="6" autocomplete="off" />
+      <div class="row" style="margin-top:8px;">
+        <button id="pin-ok" class="primary">OK</button>
+        <button id="pin-cancel" class="secondary">Cancel</button>
+      </div>
+      <div id="pin-status" class="status"></div>
+    </div>
+
+    <p class="footer-note lockable" style="margin:12px 0 0;">
       <a href="#" id="manual-toggle">Can't scan a barcode? Enter it manually</a>
     </p>
-    <div id="manual-entry" class="row" style="display:none; margin-top:10px;">
+    <div id="manual-entry" class="row lockable" style="display:none; margin-top:10px;">
       <input type="text" id="manual-input" class="field" placeholder="e.g. 240701424" inputmode="numeric" maxlength="9" style="flex:1;" />
       <button id="manual-add-btn" class="secondary btn-auto" style="flex:0 0 auto;">Add</button>
     </div>
   </div>
 
-  <div class="card">
+  <div class="card lockable">
     <p class="eyebrow">Session</p>
     <div class="stat-row">
       <div class="stat">
@@ -74,17 +86,17 @@
     <ul id="dupe-list" class="list" style="display:none; margin-top:10px;"></ul>
   </div>
 
-  <div class="card">
+  <div class="card lockable">
     <h2 style="margin-bottom:12px;">Roll list</h2>
     <ul id="roll-list" class="list"><li class="empty">No scans yet.</li></ul>
   </div>
 
-  <div class="card" id="absent-card" style="display:none;">
+  <div class="card lockable" id="absent-card" style="display:none;">
     <h2 style="margin-bottom:12px;">Absent (<span id="absent-count">0</span>)</h2>
     <ul id="absent-list" class="list"></ul>
   </div>
 
-  <div class="card">
+  <div class="card lockable">
     <p class="eyebrow">Export</p>
     <label for="export-filename">File name (optional)</label>
     <input type="text" id="export-filename" class="field" placeholder="e.g. RollCall_2026-09-24" style="margin-bottom:10px;" />
