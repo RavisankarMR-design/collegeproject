@@ -476,7 +476,7 @@ function exportToExcel() {
     ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{ wch: 26 }, { wch: 18 }, { wch: 12 }];
+  ws['!cols'] = [{ wch: 42 }, { wch: 18 }, { wch: 12 }]; // 42 fits e.g. ravisankar.mr.2024.cse@rajalakshmi.edu.in unclipped
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
 
