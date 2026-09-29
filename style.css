@@ -1,14 +1,18 @@
 :root {
-  --bg: #0b1220;
-  --surface: #131c2e;
-  --surface-2: #1b2740;
-  --text: #e8edf7;
-  --text-dim: #8a97b3;
-  --accent: #2563eb;
+  /* REC brand palette (matched from rec-db-official.web.app, rectransport.com,
+     rajalakshmi.org) — light lavender surface, purple accent + gradient. */
+  --bg: #eeeef2;
+  --surface: #ffffff;
+  --surface-2: #f4effb;
+  --text: #1a1a2e;
+  --text-dim: #6b6b80;
+  --accent: #6a1b9a;
+  --accent-2: #9c27b0;
+  --accent-grad: linear-gradient(135deg, #6a1b9a, #9c27b0);
   --ok: #16a34a;
   --err: #dc2626;
   --warn: #d97706;
-  --border: #263252;
+  --border: #e0d9ec;
 }
 
 * { box-sizing: border-box; }
@@ -17,7 +21,9 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* No web font fetch — offline-first PWA can't depend on a CDN. Falls back
+     silently to system sans-serif if Poppins/Montserrat aren't installed. */
+  font-family: Poppins, Montserrat, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   line-height: 1.4;
   max-width: 640px;
   margin: 0 auto;
@@ -29,15 +35,21 @@ body {
 }
 
 h1 {
-  font-size: 1.4rem;
-  margin: 6px 0 4px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 10px 0 4px;
   letter-spacing: -0.01em;
+  background: var(--accent-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 h2 {
   font-size: 1rem;
   margin: 0;
   font-weight: 700;
+  color: var(--accent);
 }
 
 label {
@@ -56,11 +68,11 @@ label {
 }
 
 /* Small uppercase section label above a card's content — breaks up a page
-   of otherwise-identical gray boxes so each card reads as its own step. */
+   of otherwise-identical cards so each card reads as its own step. */
 .eyebrow {
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--text-dim);
+  color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin: 0 0 12px;
@@ -72,7 +84,7 @@ label {
   border-radius: 16px;
   padding: 18px;
   margin-bottom: 18px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  box-shadow: 0 2px 10px rgba(106, 27, 154, 0.08);
 }
 
 .field {
@@ -100,16 +112,16 @@ textarea.field { resize: vertical; }
 button {
   font-size: 0.95rem;
   font-weight: 600;
-  padding: 12px 16px;
-  border-radius: 10px;
+  padding: 12px 18px;
+  border-radius: 999px; /* pill buttons, matches REC site CTAs */
   border: none;
   cursor: pointer;
   width: 100%;
   margin-top: 8px;
 }
 
-button.primary { background: var(--accent); color: white; }
-button.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+button.primary { background: var(--accent-grad); color: white; }
+button.secondary { background: var(--surface-2); color: var(--accent); border: 1px solid var(--border); }
 button.danger { background: var(--err); color: white; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -121,14 +133,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .stat {
   flex: 1;
-  background: var(--surface-2);
-  border-radius: 10px;
+  background: var(--accent-grad);
+  border-radius: 12px;
   padding: 10px 12px;
   text-align: center;
 }
 
-.stat .num { font-size: 1.6rem; font-weight: 700; }
-.stat .label { font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
+.stat .num { font-size: 1.6rem; font-weight: 700; color: white; }
+.stat .label { font-size: 0.72rem; color: rgba(255,255,255,.85); text-transform: uppercase; letter-spacing: .04em; }
 
 .status {
   font-size: 0.85rem;
@@ -138,9 +150,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: none;
 }
 .status.show { display: block; }
-.status.ok { background: rgba(22,163,74,.15); color: #4ade80; }
-.status.err { background: rgba(220,38,38,.15); color: #f87171; }
-.status.info { background: rgba(37,99,235,.15); color: #93c5fd; }
+.status.ok { background: rgba(22,163,74,.12); color: #15803d; }
+.status.err { background: rgba(220,38,38,.1); color: #b91c1c; }
+.status.info { background: rgba(106,27,154,.1); color: #6a1b9a; }
 
 .list {
   list-style: none;
@@ -189,9 +201,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 0.75rem;
   margin-top: 24px;
 }
+.footer-note a { color: var(--accent); }
 
 /* Locked scan mode: students see only the camera + scan notifications. */
-.lock-banner { display: none; margin: 0 0 12px; font-size: 0.95rem; font-weight: 600; color: #93c5fd; }
+.lock-banner { display: none; margin: 0 0 12px; font-size: 0.95rem; font-weight: 600; color: var(--accent); }
 body.locked .lock-banner { display: block; }
 body.locked .lockable { display: none !important; }
 .pin-panel { margin-top: 10px; }
