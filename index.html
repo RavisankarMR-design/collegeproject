@@ -28,6 +28,7 @@
     <div id="roster-section" style="display:none; margin-top:14px;">
       <button id="trial-roster-btn" class="secondary btn-auto btn-sm">Use Trial Class 1 roster (140 students)</button>
       <p class="subtitle" style="margin:12px 0 10px;">Or paste your own — one per line: roll number, comma, name. Skip this to just scan plain roll numbers.</p>
+      <label for="roster-input" class="sr-only">Class roster — roll number, comma, name, one per line</label>
       <textarea id="roster-input" class="field" rows="3" placeholder="240701424, Ravisankar&#10;..."></textarea>
       <div class="row" style="margin-top:10px;">
         <button id="roster-load-btn" class="secondary">Load roster</button>
@@ -64,6 +65,7 @@
       <a href="#" id="manual-toggle">Can't scan a barcode? Enter it manually</a>
     </p>
     <div id="manual-entry" class="row lockable" style="display:none; margin-top:10px;">
+      <label for="manual-input" class="sr-only">Roll number to add manually</label>
       <input type="text" id="manual-input" class="field" placeholder="e.g. 240701424" inputmode="numeric" maxlength="9" style="flex:1;" />
       <button id="manual-add-btn" class="secondary btn-auto" style="flex:0 0 auto;">Add</button>
     </div>
@@ -103,6 +105,18 @@
     <input type="text" id="export-filename" class="field" placeholder="e.g. RollCall_2026-09-24" style="margin-bottom:10px;" />
     <button id="export-btn" class="primary" disabled>⬇ Export to Excel (.xlsx)</button>
     <button id="clear-btn" class="danger" disabled>🗑 Clear list</button>
+  </div>
+
+  <div id="modal-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+      <p id="modal-message"></p>
+      <label for="modal-input" id="modal-input-label" class="sr-only">Value</label>
+      <input type="text" id="modal-input" class="field" style="display:none; margin-bottom:14px;" />
+      <div class="row">
+        <button id="modal-cancel" class="secondary">Cancel</button>
+        <button id="modal-ok" class="primary">OK</button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>

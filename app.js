@@ -115,6 +115,48 @@ const els = {
   absentCount: document.getElementById('absent-count'),
 };
 
+// Custom confirm()/prompt() replacement — matches the app's theme instead of
+// the browser's native dialog. Same call shape: askConfirm resolves
+// true/false, askPrompt resolves the typed string or null on cancel.
+const modalEls = {
+  overlay: document.getElementById('modal-overlay'),
+  message: document.getElementById('modal-message'),
+  input: document.getElementById('modal-input'),
+  ok: document.getElementById('modal-ok'),
+  cancel: document.getElementById('modal-cancel'),
+};
+function openModal({ message, withInput, defaultValue }) {
+  return new Promise((resolve) => {
+    modalEls.message.textContent = message;
+    modalEls.input.style.display = withInput ? 'block' : 'none';
+    modalEls.input.value = withInput ? (defaultValue || '') : '';
+    modalEls.overlay.style.display = 'flex';
+    if (withInput) modalEls.input.focus();
+
+    const cleanup = () => {
+      modalEls.overlay.style.display = 'none';
+      modalEls.ok.removeEventListener('click', onOk);
+      modalEls.cancel.removeEventListener('click', onCancel);
+      modalEls.input.removeEventListener('keydown', onKey);
+    };
+    const onOk = () => { cleanup(); resolve(withInput ? modalEls.input.value : true); };
+    const onCancel = () => { cleanup(); resolve(withInput ? null : false); };
+    const onKey = (e) => {
+      if (e.key === 'Enter') onOk();
+      if (e.key === 'Escape') onCancel();
+    };
+    modalEls.ok.addEventListener('click', onOk);
+    modalEls.cancel.addEventListener('click', onCancel);
+    modalEls.input.addEventListener('keydown', onKey);
+  });
+}
+function askConfirm(message) {
+  return openModal({ message, withInput: false });
+}
+function askPrompt(message, defaultValue) {
+  return openModal({ message, withInput: true, defaultValue });
+}
+
 function setStatus(text, kind) {
   els.status.textContent = text;
   els.status.className = `status show ${kind}`;
@@ -237,11 +279,11 @@ els.list.addEventListener('click', (e) => {
 // is just as easily removed and retyped, but a scan is trusted as correct
 // by default, so there was previously no way to correct one without
 // deleting and re-scanning the same card again.
-function editEntry(idx) {
+async function editEntry(idx) {
   const row = rows[idx];
   if (!row) return;
 
-  const next = prompt('Edit roll number:', row.rollNo);
+  const next = await askPrompt('Edit roll number:', row.rollNo);
   if (next === null) return; // cancelled
   const rollNo = next.trim();
   if (!rollNo || rollNo === row.rollNo) return;
@@ -490,12 +532,12 @@ function exportToExcel() {
   XLSX.writeFile(wb, `${base.replace(/\.xlsx$/i, '')}.xlsx`);
 }
 
-function clearList() {
+async function clearList() {
   if (rows.length === 0 && dupeCount === 0) return;
   const msg = rows.length > 0
     ? `Clear all ${rows.length} scanned entries and the repeats count? This cannot be undone (export first if you need them).`
     : `Clear the repeats count (${dupeCount})? There's no scanned list to lose.`;
-  if (!confirm(msg)) return;
+  if (!(await askConfirm(msg))) return;
   rows.length = 0;
   seenRollNos.clear();
   dupeCount = 0;
@@ -576,9 +618,9 @@ function loadTrialClass1Roster() {
 
 els.trialRosterBtn.addEventListener('click', loadTrialClass1Roster);
 els.rosterLoadBtn.addEventListener('click', loadRosterFromInput);
-els.rosterClearBtn.addEventListener('click', () => {
+els.rosterClearBtn.addEventListener('click', async () => {
   const blockNote = trialActive ? ' (roll-number restriction lifted too — any roll can be scanned again)' : '';
-  if (!confirm(`Clear the loaded roster (${roster.size} students)? Already-scanned entries stay, but names/absent-tracking go away${blockNote}.`)) return;
+  if (!(await askConfirm(`Clear the loaded roster (${roster.size} students)? Already-scanned entries stay, but names/absent-tracking go away${blockNote}.`))) return;
   roster.clear();
   trialActive = false;
   saveRoster();
@@ -642,8 +684,8 @@ function updateResetBtn() {
   try { hasPin = !!localStorage.getItem(PIN_KEY); } catch { /* treat as no PIN */ }
   lockEls.resetBtn.style.display = hasPin && !isLocked() ? 'block' : 'none';
 }
-lockEls.resetBtn.addEventListener('click', () => {
-  if (!confirm('Reset the staff PIN? You\'ll set a new one next time you lock.')) return;
+lockEls.resetBtn.addEventListener('click', async () => {
+  if (!(await askConfirm('Reset the staff PIN? You\'ll set a new one next time you lock.'))) return;
   try { localStorage.removeItem(PIN_KEY); } catch { /* not critical */ }
   updateResetBtn();
   setStatus('PIN reset — a new one will be asked for next lock.', 'info');

@@ -39,10 +39,15 @@ h1 {
   font-weight: 700;
   margin: 10px 0 4px;
   letter-spacing: -0.01em;
-  background: var(--accent-grad);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--accent); /* fallback if background-clip:text isn't supported — without this the heading renders invisible */
+}
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  h1 {
+    background: var(--accent-grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
 }
 
 h2 {
@@ -150,7 +155,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: none;
 }
 .status.show { display: block; }
-.status.ok { background: rgba(22,163,74,.12); color: #15803d; }
+.status.ok { background: rgba(22,163,74,.12); color: #166534; } /* #166534 clears 6.2:1 on this tint, #15803d only cleared 4.4:1 */
 .status.err { background: rgba(220,38,38,.1); color: #b91c1c; }
 .status.info { background: rgba(106,27,154,.1); color: #6a1b9a; }
 
@@ -202,6 +207,38 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-top: 24px;
 }
 .footer-note a { color: var(--accent); }
+
+/* Visually hidden but present for screen readers — for inputs whose label
+   would be redundant on-screen next to already-visible instruction text. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Custom confirm/prompt modal — replaces native confirm()/prompt() so the
+   dialog matches the app theme instead of the browser's default popup. */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(26,26,46,.5);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+  z-index: 1000;
+}
+.modal-box {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 20px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 10px 30px rgba(0,0,0,.2);
+}
+.modal-box p { margin: 0 0 16px; font-size: 0.95rem; }
+.modal-box .row button { margin-top: 0; }
 
 /* Locked scan mode: students see only the camera + scan notifications. */
 .lock-banner { display: none; margin: 0 0 12px; font-size: 0.95rem; font-weight: 600; color: var(--accent); }
