@@ -437,18 +437,43 @@ function fullRollNo(rollNo) {
   return /^\d{9}$/.test(rollNo) ? COLLEGE_ID_PREFIX + rollNo : rollNo;
 }
 
+// Guessed from a real example (ravisankar.mr.2024.cse@rajalakshmi.edu.in for
+// "Ravi Sankar M R", roll 240701424): firstname+middlename run together,
+// trailing 1-2 letter initial words joined separately, then .year.dept.
+// DEPT_CODE is hardcoded 'cse' — only correct for a CSE roster. A pasted
+// roster for another department needs this changed, or the emails will be
+// wrong. Also wrong for any name that doesn't end in short initials (e.g. a
+// real surname like "Subedi") — this is a best-effort guess, not verified
+// data, until a real roll->email roster replaces it.
+const DEPT_CODE = 'cse';
+function guessEmail(name, rollNo) {
+  if (!name) return '';
+  const words = name.trim().split(/\s+/);
+  let splitAt = words.length;
+  while (splitAt > 0 && /^[A-Za-z]{1,2}$/.test(words[splitAt - 1])) splitAt--;
+  if (splitAt === 0) splitAt = words.length; // whole name was short tokens: don't split into nothing
+  const first = words.slice(0, splitAt).join('').toLowerCase();
+  const initials = words.slice(splitAt).join('').toLowerCase();
+  const year = '20' + rollNo.slice(0, 2);
+  const local = initials ? `${first}.${initials}.${year}.${DEPT_CODE}` : `${first}.${year}.${DEPT_CODE}`;
+  return `${local}@rajalakshmi.edu.in`;
+}
+
 // Single-sheet format matching the college DB export: Email id, Register id,
-// Attendance. Email is left blank — P3 only ever sees a roll number off the
-// barcode, never a real email, so it can't be filled in without a real
-// roll->email roster (not loaded yet). Every roster entry defaults to
-// "Absent"; a scan flips just that row to "Present" — no separate sheets.
+// Attendance. Email is a best-effort guess from the roster name (see
+// guessEmail above), blank if no roster/name is loaded. Every roster entry
+// defaults to "Absent"; a scan flips just that row to "Present".
 function exportToExcel() {
   const source = roster.size > 0
     ? [...roster.keys()]
     : rows.map((r) => r.rollNo); // no roster loaded: list only what was actually scanned
   const data = [
     ['Email id', 'Register id', 'Attendance'],
-    ...source.map((rollNo) => ['', fullRollNo(rollNo), seenRollNos.has(rollNo) ? 'Present' : 'Absent']),
+    ...source.map((rollNo) => [
+      guessEmail(roster.get(rollNo), rollNo),
+      fullRollNo(rollNo),
+      seenRollNos.has(rollNo) ? 'Present' : 'Absent',
+    ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!cols'] = [{ wch: 26 }, { wch: 18 }, { wch: 12 }];
