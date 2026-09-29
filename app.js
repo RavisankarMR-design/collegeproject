@@ -595,6 +595,7 @@ const lockEls = {
   ok: document.getElementById('pin-ok'),
   cancel: document.getElementById('pin-cancel'),
   status: document.getElementById('pin-status'),
+  resetBtn: document.getElementById('reset-pin-btn'),
 };
 let pinMode = null; // 'set' | 'unlock'
 let pinFails = 0;
@@ -610,8 +611,22 @@ function applyLock(on) {
   document.body.classList.toggle('locked', on);
   try { localStorage.setItem(LOCK_KEY, on ? '1' : ''); } catch { /* not critical */ }
   lockEls.btn.textContent = on ? '🔓 Unlock (staff PIN)' : '🔒 Lock for students';
+  updateResetBtn();
   closePinPanel();
 }
+// Only ever reachable while unlocked (hidden by .lockable during lock) — a
+// forgotten PIN otherwise has no in-page recovery short of clearing site data.
+function updateResetBtn() {
+  let hasPin = false;
+  try { hasPin = !!localStorage.getItem(PIN_KEY); } catch { /* treat as no PIN */ }
+  lockEls.resetBtn.style.display = hasPin && !isLocked() ? 'block' : 'none';
+}
+lockEls.resetBtn.addEventListener('click', () => {
+  if (!confirm('Reset the staff PIN? You\'ll set a new one next time you lock.')) return;
+  try { localStorage.removeItem(PIN_KEY); } catch { /* not critical */ }
+  updateResetBtn();
+  setStatus('PIN reset — a new one will be asked for next lock.', 'info');
+});
 function openPinPanel(mode) {
   pinMode = mode;
   lockEls.label.textContent = mode === 'set' ? 'Set a staff PIN (4–6 digits)' : 'Staff PIN';
@@ -660,6 +675,7 @@ lockEls.ok.addEventListener('click', submitPin);
 lockEls.cancel.addEventListener('click', closePinPanel);
 lockEls.input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitPin(); });
 try { if (localStorage.getItem(LOCK_KEY) === '1') applyLock(true); } catch { /* start unlocked */ }
+updateResetBtn();
 
 loadRoster();
 loadTrialActive();
