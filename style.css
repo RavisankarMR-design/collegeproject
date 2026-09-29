@@ -256,9 +256,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   z-index: 2000;
   transition: opacity .35s ease;
 }
-.splash img { width: 120px; height: 120px; }
-.splash-college { color: var(--text-dim); font-size: 0.85rem; font-weight: 600; margin: 4px 0 0; text-align: center; padding: 0 24px; }
-.splash-app { color: var(--accent); font-size: 1.3rem; font-weight: 700; margin: 0; text-align: center; }
+.splash-logo { width: min(280px, 80vw); height: auto; }
+.splash-app { color: var(--accent); font-size: 1.3rem; font-weight: 700; margin: 8px 0 0; text-align: center; }
 .splash.hide { opacity: 0; pointer-events: none; }
 
 /* Locked scan mode: students see only the camera + scan notifications. */
