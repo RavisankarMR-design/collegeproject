@@ -27,18 +27,25 @@ specific class" — that grouping has to be defined and stored separately
   Trial Class 1, fully offline, zero Firebase involved. No regression, no
   forced dependency.
 - **First-time login (needs internet once):** staff signs in, server hands
-  back the roster(s) for the class(es) assigned to them, and it gets
-  written into `localStorage` through the same `saveRoster()` P3 already
-  has. From that point on it's indistinguishable from a pasted roster —
-  fully offline again, forever, until they choose to re-sync.
+  back **every class assigned to them** — their whole timetable's worth,
+  not just one — and ALL of it gets cached into `localStorage` in one shot.
+  One login, one fetch, done — not repeated per session/day.
+- **Every session after that (fully offline, no server call):** the app
+  shows the staff's full cached class list, and **auto-highlights/pre-selects
+  whichever class matches right now** by checking the cached timetable data
+  (day + period) against the phone's own clock. Staff can still tap a
+  different class from the list manually — the highlight is a convenience,
+  not a lock. Re-login only pulls fresh data if the staff explicitly wants
+  to re-sync (e.g. timetable changed mid-term).
 
 ## Data model (Firestore)
 
 - **`staff/{email}`** — name, department.
 - **`staff/{email}/classes`** — subcollection: which class IDs this staff
   teaches (their timetable assignment).
-- **`classes/{classId}`** — className, department, and the list of roll
-  numbers in that class. This is the piece the flat department DB can't
+- **`classes/{classId}`** — className, department, the list of roll numbers
+  in that class, and its timetable slot(s) (day + period/time). The roll
+  list and the timetable slot are both pieces the flat department DB can't
   provide — someone (admin, or derived from a real timetable export) has
   to define this once per class/term.
 - **`students/{rollNo}`** — name, email, department. This *is* the flat
@@ -50,14 +57,26 @@ specific class" — that grouping has to be defined and stored separately
 
 1. Staff signs in (Google, restricted to `@rajalakshmi.edu.in` — same
    domain restriction Project 1's `utils/auth.js` already enforces).
-2. App reads `staff/{their email}/classes` → gets their assigned class IDs.
-3. For each class, pulls its roll-number list from `classes/{classId}`,
-   then resolves each roll number to a real name + email via
-   `students/{rollNo}`.
-4. Writes the result into `localStorage` via the existing `saveRoster()` /
-   `ROSTER_KEY` mechanism in `app.js` — no new local storage path needed,
-   it's populated from the server instead of typed by hand.
-5. Fully offline from there. Re-login only pulls fresh data on request.
+2. App reads `staff/{their email}/classes` → gets ALL their assigned class
+   IDs, their whole timetable's worth, in one go.
+3. For every one of those classes, pulls its roll-number list + timetable
+   slot from `classes/{classId}`, then resolves each roll number to a real
+   name + email via `students/{rollNo}`.
+4. Caches the **entire set** of classes (rosters + timetable slots) into
+   `localStorage` in one write — new key alongside the existing
+   `ROSTER_KEY`, since now there's a list of rosters to choose from, not
+   just one active one.
+5. Fully offline from there, every session:
+   - App checks the phone's current day/time against each cached class's
+     timetable slot and **highlights the matching class** in the list.
+   - Staff taps it to load that class as the active roster (reuses the
+     existing `saveRoster()` / `ROSTER_KEY` single-active-roster mechanism
+     P3 already has, same as picking Trial Class 1 today) — or picks a
+     different class from the list manually if the auto-pick is wrong.
+   - No server call happens here — this is pure local computation against
+     the one-time cached data.
+6. Re-login only pulls fresh data if the staff explicitly wants to
+   re-sync (e.g. timetable changed mid-term) — not on every session.
 
 ## What's actually blocking the build
 
