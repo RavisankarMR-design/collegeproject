@@ -437,27 +437,23 @@ function fullRollNo(rollNo) {
   return /^\d{9}$/.test(rollNo) ? COLLEGE_ID_PREFIX + rollNo : rollNo;
 }
 
+// Single-sheet format matching the college DB export: Email id, Register id,
+// Attendance. Email is left blank — P3 only ever sees a roll number off the
+// barcode, never a real email, so it can't be filled in without a real
+// roll->email roster (not loaded yet). Every roster entry defaults to
+// "Absent"; a scan flips just that row to "Present" — no separate sheets.
 function exportToExcel() {
+  const source = roster.size > 0
+    ? [...roster.keys()]
+    : rows.map((r) => r.rollNo); // no roster loaded: list only what was actually scanned
   const data = [
-    ['Roll No', 'Name', 'Scanned At'],
-    ...rows.map((r) => [fullRollNo(r.rollNo), roster.get(r.rollNo) || '', r.scannedAt.toLocaleString()]),
+    ['Email id', 'Register id', 'Attendance'],
+    ...source.map((rollNo) => ['', fullRollNo(rollNo), seenRollNos.has(rollNo) ? 'Present' : 'Absent']),
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{ wch: 18 }, { wch: 22 }, { wch: 22 }];
+  ws['!cols'] = [{ wch: 26 }, { wch: 18 }, { wch: 12 }];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Present');
-
-  // Only meaningful with a roster loaded — otherwise there's no "expected
-  // list" to compare against, so a second sheet would just be noise.
-  if (roster.size > 0) {
-    const absentData = [
-      ['Roll No', 'Name'],
-      ...[...roster.entries()].filter(([rollNo]) => !seenRollNos.has(rollNo)).map(([rollNo, name]) => [fullRollNo(rollNo), name]),
-    ];
-    const wsAbsent = XLSX.utils.aoa_to_sheet(absentData);
-    wsAbsent['!cols'] = [{ wch: 18 }, { wch: 22 }];
-    XLSX.utils.book_append_sheet(wb, wsAbsent, 'Absent');
-  }
+  XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const defaultName = `RollCall_${stamp}`;
