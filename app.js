@@ -105,8 +105,6 @@ const els = {
   countLabel: document.getElementById('count-label'),
   rosterToggle: document.getElementById('roster-toggle'),
   rosterSection: document.getElementById('roster-section'),
-  rosterInput: document.getElementById('roster-input'),
-  rosterLoadBtn: document.getElementById('roster-load-btn'),
   rosterClearBtn: document.getElementById('roster-clear-btn'),
   trialRosterBtn: document.getElementById('trial-roster-btn'),
   rosterStatus: document.getElementById('roster-status'),
@@ -575,30 +573,6 @@ function setRosterStatus(text, kind) {
   els.rosterStatus.className = `status show ${kind}`;
 }
 
-function loadRosterFromInput() {
-  const lines = els.rosterInput.value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length === 0) { setRosterStatus('Paste at least one line first.', 'err'); return; }
-
-  roster.clear();
-  trialActive = false; // a custom pasted roster never blocks off-roster scans, only Trial Class 1 does
-  let skipped = 0;
-  for (const line of lines) {
-    const [rawRoll, ...rest] = line.split(',');
-    const rollNo = (rawRoll || '').trim().toUpperCase();
-    if (!ROLL_NO_RE.test(rollNo)) { skipped++; continue; }
-    roster.set(rollNo, rest.join(',').trim());
-  }
-
-  if (roster.size === 0) { setRosterStatus('No valid roll numbers found (format: 24 + 7 digits).', 'err'); return; }
-
-  saveRoster();
-  saveTrialActive();
-  els.rosterClearBtn.style.display = 'block';
-  els.rosterInput.value = '';
-  setRosterStatus(`Loaded ${roster.size} student${roster.size === 1 ? '' : 's'}.${skipped ? ` (${skipped} line${skipped === 1 ? '' : 's'} skipped — bad format)` : ''}`, 'ok');
-  renderList();
-}
-
 // Explicit opt-in only — loading this never happens automatically, so a
 // class that never taps this button behaves exactly as before (plain roll
 // numbers, no names, no absent tracking). Same guarantee as the paste-based
@@ -617,7 +591,6 @@ function loadTrialClass1Roster() {
 }
 
 els.trialRosterBtn.addEventListener('click', loadTrialClass1Roster);
-els.rosterLoadBtn.addEventListener('click', loadRosterFromInput);
 els.rosterClearBtn.addEventListener('click', async () => {
   const blockNote = trialActive ? ' (roll-number restriction lifted too — any roll can be scanned again)' : '';
   if (!(await askConfirm(`Clear the loaded roster (${roster.size} students)? Already-scanned entries stay, but names/absent-tracking go away${blockNote}.`))) return;
