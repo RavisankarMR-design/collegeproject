@@ -2,6 +2,9 @@
 // Standalone, offline-first: no server, no network calls. Everything (the
 // scanned list, the Excel file) is produced entirely in this browser tab.
 
+const SPLASH_START = performance.now();
+const SPLASH_MIN_MS = 600; // avoids a flash-then-instant-hide on a fast/cached load
+
 const READER_ID = 'reader';
 const DUPLICATE_COOLDOWN_MS = 1500; // ignore the same code re-firing while still in frame
 const STORAGE_KEY = 'rollcall_state_v1';
@@ -729,6 +732,13 @@ if (roster.size > 0) {
 loadState();
 renderList();
 if (rows.length > 0) setStatus(`Restored ${rows.length} scan${rows.length === 1 ? '' : 's'} from before — keep going or export.`, 'info');
+
+// Everything above is synchronous, so the page is actually ready right now —
+// but hiding the splash instantly on a fast/cached load would just flash it.
+// Wait out whatever's left of SPLASH_MIN_MS instead.
+const splashEl = document.getElementById('splash');
+const elapsed = performance.now() - SPLASH_START;
+setTimeout(() => splashEl.classList.add('hide'), Math.max(0, SPLASH_MIN_MS - elapsed));
 
 if ('serviceWorker' in navigator) {
   // Captured before registering: distinguishes "first-ever install" (no
