@@ -156,6 +156,47 @@ only they can do) and picking a name.
   assistant's own browser tool) each time before shipping, **not yet
   re-verified on real phone hardware** after all these changes stacked up.
 
+## Staff Google sign-in gate (2026-10-02 session)
+
+Resolves one of the two deferred decisions in the Firebase plan below —
+**sign-in method** — but scoped to *just the login gate*, not the
+roster-sync feature. The two are separable: a gate answering "who's
+allowed to open the scanner" doesn't need Firestore or a backend at all,
+so it was built with **Google Identity Services directly, not Firebase**.
+Firestore/Firebase stays reserved for roster-sync specifically, still
+blocked exactly as described below.
+
+- `#login-screen` in `index.html` — full-page overlay, same pattern as
+  `#splash`, shown until a valid session exists (cached or fresh).
+  `body.login-pending` hides every other top-level element outright (not
+  just visually covered — removed from tab order/screen readers too).
+- Restricted to `@rajalakshmi.edu.in` via the sign-in request's `hd`
+  param, re-checked client-side against the returned token's own claim.
+  **Not signature-verified** — there's no backend to verify against and
+  nothing sensitive is protected server-side, same soft-gate threat model
+  as the staff PIN lock above (keeps out casual access, not a determined
+  bypass via dev tools).
+- First sign-in needs internet (loads `accounts.google.com/gsi/client`) —
+  the one deliberate exception to this app's offline-first rule, same
+  tradeoff the Firebase plan below already accepted for its own login
+  step. Signed-in email cached in `localStorage` (`rollcall_user_v1`);
+  every session after is fully offline, confirmed with the server killed
+  outright in testing.
+- Sign-out link clears the cached session and reloads to the login
+  screen.
+- **`GOOGLE_CLIENT_ID` in `app.js` is a placeholder** — needs a real
+  OAuth Client ID from Google Cloud Console (APIs & Services →
+  Credentials) with this site's URL added to Authorized JavaScript
+  Origins. Account-level step, same category as the Firebase/GitHub-org
+  blockers below — until done, the sign-in button shows a clear "not
+  configured" message instead of a broken Google popup.
+- Tested headless (6/6, since the in-app browser pane can't register a
+  service worker on `localhost`): no-session gate, wrong-domain
+  rejection, valid sign-in, cached-session reload, fully-offline reload,
+  sign-out. Export format and scan flow spot-checked unaffected. **Not
+  yet tested against a real Google OAuth popup** — blocked on the Client
+  ID above.
+
 ## Firebase roster-sync plan (not built — see FIREBASE-ROSTER-PLAN.md)
 
 Full detail in `FIREBASE-ROSTER-PLAN.md` in this folder. Summary:
@@ -181,10 +222,12 @@ Full detail in `FIREBASE-ROSTER-PLAN.md` in this folder. Summary:
   lookup, replaces `guessEmail()`).
 - **Blocked on:** no Firebase project created yet (account-level step,
   same category as the GitHub org above), no real department DB in hand,
-  no real staff/timetable data in hand. Two decisions explicitly
-  deferred: sign-in method (reuse P1's Google Sign-In vs. separate P3-only
-  login) and how rosters get uploaded into Firestore initially
-  (CSV-paste admin tool vs. manual Firebase-console entry).
+  no real staff/timetable data in hand. **Sign-in method is resolved** —
+  P3 now has its own Google Identity Services login (see section above),
+  separate from P1's, which this feature would reuse (that identity's
+  email is already the natural key for `staff/{email}` above). Still
+  deferred: how rosters get uploaded into Firestore initially (CSV-paste
+  admin tool vs. manual Firebase-console entry).
 
 ## Related ideas discussed, not part of this project
 
