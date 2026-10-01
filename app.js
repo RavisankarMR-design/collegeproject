@@ -5,6 +5,24 @@
 const SPLASH_START = performance.now();
 const SPLASH_MIN_MS = 600; // avoids a flash-then-instant-hide on a fast/cached load
 
+// Staff sign-in gate — Google Identity Services, not Firebase: this is just
+// a login gate (who's allowed to open the scanner), not the roster-sync
+// feature, so there's no need for a backend or a Firebase project at all.
+// Restricted to the college domain via the `hd` (hosted domain) request
+// param + a client-side re-check of the token's own `hd`/email claim — a
+// soft gate, not a security boundary (same spirit as the staff PIN above:
+// nothing sensitive is actually stored server-side to protect). The ID
+// token is decoded but never signature-verified, since there's no backend
+// to verify against and nothing here depends on that guarantee.
+//
+// PLACEHOLDER — replace with a real OAuth Client ID from Google Cloud
+// Console (APIs & Services -> Credentials), with this site's URL added to
+// "Authorized JavaScript origins". Until then the sign-in button will show
+// a "not configured" error instead of a real Google popup.
+const GOOGLE_CLIENT_ID = 'REPLACE_WITH_REAL_CLIENT_ID.apps.googleusercontent.com';
+const ALLOWED_EMAIL_DOMAIN = 'rajalakshmi.edu.in';
+const LOGIN_KEY = 'rollcall_user_v1';
+
 const READER_ID = 'reader';
 const DUPLICATE_COOLDOWN_MS = 1500; // ignore the same code re-firing while still in frame
 const STORAGE_KEY = 'rollcall_state_v1';
@@ -732,6 +750,105 @@ if (roster.size > 0) {
 loadState();
 renderList();
 if (rows.length > 0) setStatus(`Restored ${rows.length} scan${rows.length === 1 ? '' : 's'} from before — keep going or export.`, 'info');
+
+// --- Staff sign-in gate ---------------------------------------------------
+
+const loginEls = {
+  screen: document.getElementById('login-screen'),
+  btnSlot: document.getElementById('google-btn-slot'),
+  status: document.getElementById('login-status'),
+  signedInAs: document.getElementById('signed-in-as'),
+};
+
+function loginError(text) {
+  loginEls.status.textContent = text;
+  loginEls.status.className = 'status show err';
+}
+
+function getCachedUser() {
+  try {
+    const raw = localStorage.getItem(LOGIN_KEY);
+    if (!raw) return null;
+    const u = JSON.parse(raw);
+    return u && typeof u.email === 'string' ? u : null;
+  } catch { return null; }
+}
+
+// No signature check (see constant comment above) — just reads the JSON
+// payload out of the JWT's middle segment.
+function decodeJwt(token) {
+  const payload = token.split('.')[1];
+  const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+  return JSON.parse(json);
+}
+
+function showApp(user) {
+  loginEls.screen.style.display = 'none';
+  document.body.classList.remove('login-pending');
+  loginEls.signedInAs.style.display = 'block';
+  loginEls.signedInAs.innerHTML = `Signed in as ${escapeHtml(user.email)} · <a href="#" id="sign-out-link">Sign out</a>`;
+  document.getElementById('sign-out-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    try { localStorage.removeItem(LOGIN_KEY); } catch { /* not critical */ }
+    location.reload();
+  });
+}
+
+function showLoginScreen() {
+  loginEls.screen.style.display = 'flex';
+  document.body.classList.add('login-pending');
+}
+
+function handleCredentialResponse(response) {
+  let claims;
+  try { claims = decodeJwt(response.credential); } catch { loginError('Could not read that sign-in response — try again.'); return; }
+  const email = String(claims.email || '').toLowerCase();
+  const domainOk = claims.hd === ALLOWED_EMAIL_DOMAIN || email.endsWith('@' + ALLOWED_EMAIL_DOMAIN);
+  if (!domainOk) { loginError(`${claims.email || 'That account'} isn't a @${ALLOWED_EMAIL_DOMAIN} account.`); return; }
+  const user = { email, name: claims.name || email, loginAt: new Date().toISOString() };
+  try { localStorage.setItem(LOGIN_KEY, JSON.stringify(user)); } catch { /* still proceed for this session */ }
+  showApp(user);
+}
+window.handleCredentialResponse = handleCredentialResponse; // GIS calls this by name from its own script
+
+function initGoogleSignIn() {
+  if (!window.google || !google.accounts || !google.accounts.id) {
+    loginError('Could not reach Google sign-in — check your internet connection and reload.');
+    return;
+  }
+  if (GOOGLE_CLIENT_ID.startsWith('REPLACE_WITH')) {
+    loginError('Sign-in isn’t configured yet (no Google Client ID set) — contact the app maintainer.');
+    return;
+  }
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: handleCredentialResponse,
+    hd: ALLOWED_EMAIL_DOMAIN, // hints Google's picker toward college accounts; still re-checked above
+  });
+  google.accounts.id.renderButton(loginEls.btnSlot, { theme: 'outline', size: 'large', width: 280 });
+}
+
+// GIS is loaded from Google, not vendored — the one deliberate exception to
+// this app's offline-first rule, same tradeoff the Firebase plan already
+// accepted ("first-time login needs internet once"). Only fetched when
+// there's no cached session; every login after the first is fully offline.
+function loadGoogleSignIn() {
+  const script = document.createElement('script');
+  script.src = 'https://accounts.google.com/gsi/client';
+  script.async = true;
+  script.defer = true;
+  script.onload = initGoogleSignIn;
+  script.onerror = () => loginError('Could not reach Google sign-in — check your internet connection and reload.');
+  document.head.appendChild(script);
+}
+
+const cachedUser = getCachedUser();
+if (cachedUser) {
+  showApp(cachedUser);
+} else {
+  showLoginScreen();
+  loadGoogleSignIn();
+}
 
 // Everything above is synchronous, so the page is actually ready right now —
 // but hiding the splash instantly on a fast/cached load would just flash it.

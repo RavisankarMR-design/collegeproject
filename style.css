@@ -260,6 +260,31 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .splash-app { color: var(--accent); font-size: 1.3rem; font-weight: 700; margin: 8px 0 0; text-align: center; }
 .splash.hide { opacity: 0; pointer-events: none; }
 
+/* Staff sign-in gate — same full-page overlay treatment as .splash, but
+   stays up until a valid @rajalakshmi.edu.in session exists (cached or
+   fresh), instead of a fixed timer. */
+.login-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  z-index: 1900;
+}
+.login-title { color: var(--accent); font-size: 1.3rem; font-weight: 700; margin: 8px 0 0; }
+#google-btn-slot { margin-top: 8px; min-height: 44px; }
+#signed-in-as { color: var(--text-dim); }
+#signed-in-as a { color: var(--accent); }
+
+/* While signed out, nothing but the splash/login overlays should exist in
+   the page at all — not just visually covered, since a fixed overlay alone
+   still leaves the rest tabbable/readable by assistive tech underneath. */
+body.login-pending > *:not(#login-screen):not(#splash) { display: none; }
+
 /* Locked scan mode: students see only the camera + scan notifications. */
 .lock-banner { display: none; margin: 0 0 12px; font-size: 0.95rem; font-weight: 600; color: var(--accent); }
 body.locked .lock-banner { display: block; }

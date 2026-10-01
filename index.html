@@ -23,8 +23,17 @@
     <p class="splash-app">ID Barcode Roll Call</p>
   </div>
 
+  <div id="login-screen" class="login-screen" style="display:none;">
+    <img class="splash-logo" src="icons/college-logo-full.png" alt="Rajalakshmi Engineering College" />
+    <p class="login-title">Staff Sign-In</p>
+    <p class="subtitle" style="text-align:center; max-width:320px;">Sign in with your @rajalakshmi.edu.in Google account to use the scanner.</p>
+    <div id="google-btn-slot"></div>
+    <div id="login-status" class="status" style="max-width:320px;"></div>
+  </div>
+
   <h1 class="lockable">ID Barcode Roll Call</h1>
   <p class="subtitle lockable">Scan each student's ID card barcode. It keeps scanning — the list builds itself. Export to Excel when done. Works fully offline once loaded.</p>
+  <p class="footer-note lockable" id="signed-in-as" style="display:none; text-align:left; margin:0 0 14px;"></p>
 
   <div class="card lockable">
     <p class="footer-note" style="margin:0; text-align:left;">
