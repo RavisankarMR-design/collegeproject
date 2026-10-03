@@ -15,11 +15,12 @@ const SPLASH_MIN_MS = 600; // avoids a flash-then-instant-hide on a fast/cached 
 // token is decoded but never signature-verified, since there's no backend
 // to verify against and nothing here depends on that guarantee.
 //
-// PLACEHOLDER — replace with a real OAuth Client ID from Google Cloud
-// Console (APIs & Services -> Credentials), with this site's URL added to
-// "Authorized JavaScript origins". Until then the sign-in button will show
-// a "not configured" error instead of a real Google popup.
-const GOOGLE_CLIENT_ID = 'REPLACE_WITH_REAL_CLIENT_ID.apps.googleusercontent.com';
+// Same OAuth Client ID Project 1 uses (a public value — P1 serves it to every
+// visitor at /api/auth/config). Google only honors it from origins listed
+// under "Authorized JavaScript origins" for that client in Google Cloud
+// Console (APIs & Services -> Credentials), so this site's origin must be
+// added there too, or sign-in fails with an origin_mismatch error.
+const GOOGLE_CLIENT_ID = '194459417743-6idjf0kcccrql1k5i3t4mhdki540lkkb.apps.googleusercontent.com';
 const ALLOWED_EMAIL_DOMAIN = 'rajalakshmi.edu.in';
 const LOGIN_KEY = 'rollcall_user_v1';
 
