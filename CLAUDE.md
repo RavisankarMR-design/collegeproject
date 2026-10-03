@@ -184,18 +184,22 @@ blocked exactly as described below.
   outright in testing.
 - Sign-out link clears the cached session and reloads to the login
   screen.
-- **`GOOGLE_CLIENT_ID` in `app.js` is a placeholder** — needs a real
-  OAuth Client ID from Google Cloud Console (APIs & Services →
-  Credentials) with this site's URL added to Authorized JavaScript
-  Origins. Account-level step, same category as the Firebase/GitHub-org
-  blockers below — until done, the sign-in button shows a clear "not
-  configured" message instead of a broken Google popup.
+- **`GOOGLE_CLIENT_ID` in `app.js` is the same OAuth client Project 1
+  uses** (a public value — P1 serves it at `/api/auth/config`). Google only
+  honors it from origins authorized for that client, so
+  `https://ravisankarmr-design.github.io` was added under Authorized
+  JavaScript origins in Google Cloud Console (APIs & Services →
+  Credentials → "Web client 1") on 2026-10-03; verified afterwards that
+  Google's button endpoint returns 200 for the live origin (it returned
+  403 "origin is not allowed" before). **If P3 moves to a GitHub
+  organization URL, that new origin must be added there too.**
 - Tested headless (6/6, since the in-app browser pane can't register a
   service worker on `localhost`): no-session gate, wrong-domain
   rejection, valid sign-in, cached-session reload, fully-offline reload,
-  sign-out. Export format and scan flow spot-checked unaffected. **Not
-  yet tested against a real Google OAuth popup** — blocked on the Client
-  ID above.
+  sign-out. Export format and scan flow spot-checked unaffected. **The
+  real sign-in popup itself (picking an account, completing consent) is
+  not yet tested end-to-end** — it needs a real @rajalakshmi.edu.in login,
+  which has to be done by hand on a phone.
 
 ## Firebase roster-sync plan (not built — see FIREBASE-ROSTER-PLAN.md)
 
