@@ -96,8 +96,8 @@ that OS-level pin.
 Single sheet named "Attendance", **not** separate Present/Absent sheets
 (the earlier format). Columns: **Email id | Register id | Attendance**.
 Matches the real college DB's expected default export shape — every
-roster entry defaults to `Absent`; a scan flips just that row to
-`Present`. `Register id` includes the real `2116` college prefix
+roster entry defaults to `ABSENT`; a scan flips just that row to
+`PRESENT` (all caps, matches the college DB's format). `Register id` includes the real `2116` college prefix
 (`fullRollNo()` in `app.js`).
 
 **Email id is a best-effort guess**, not verified data —

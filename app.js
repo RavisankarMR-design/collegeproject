@@ -534,7 +534,7 @@ function exportToExcel() {
     ...source.map((rollNo) => [
       guessEmail(roster.get(rollNo), rollNo),
       fullRollNo(rollNo),
-      seenRollNos.has(rollNo) ? 'Present' : 'Absent',
+      seenRollNos.has(rollNo) ? 'PRESENT' : 'ABSENT',
     ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
