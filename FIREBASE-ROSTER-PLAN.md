@@ -43,15 +43,19 @@ specific class" — that grouping has to be defined and stored separately
 - **`staff/{email}`** — name, department.
 - **`staff/{email}/classes`** — subcollection: which class IDs this staff
   teaches (their timetable assignment).
-- **`classes/{classId}`** — className, department, the list of roll numbers
-  in that class, and its timetable slot(s) (day + period/time). The roll
-  list and the timetable slot are both pieces the flat department DB can't
-  provide — someone (admin, or derived from a real timetable export) has
-  to define this once per class/term.
-- **`students/{rollNo}`** — name, email, department. This *is* the flat
-  department DB, used purely as a lookup table — replaces the current
-  `guessEmail()` heuristic in `app.js` with real verified data instead of a
-  guessed pattern.
+- **`classes/{classId}`** — className, department, `staffEmails` (array of
+  who may read it), its timetable slot(s) (day + period/time), and the
+  **full student list embedded in the doc**: `students: [{roll, name,
+  email}, ...]`. The roll list and the timetable slot are both pieces the
+  flat department DB can't provide — someone (admin, or derived from the
+  DigiCampus timetable/class export) has to define this once per
+  class/term. (Embedded rather than looked up per student — see "Scale"
+  below for why.)
+- **`students/{rollNo}`** — name, email, department: the flat department
+  DB. No longer read by the app at login (the class docs carry their own
+  copy); it's the admin-side source the import script copies from. The
+  copied real name/email replaces the current `guessEmail()` heuristic in
+  `app.js` with verified data instead of a guessed pattern.
 
 ## Login flow
 
@@ -59,9 +63,9 @@ specific class" — that grouping has to be defined and stored separately
    domain restriction Project 1's `utils/auth.js` already enforces).
 2. App reads `staff/{their email}/classes` → gets ALL their assigned class
    IDs, their whole timetable's worth, in one go.
-3. For every one of those classes, pulls its roll-number list + timetable
-   slot from `classes/{classId}`, then resolves each roll number to a real
-   name + email via `students/{rollNo}`.
+3. For every one of those classes, pulls the class doc from
+   `classes/{classId}` — timetable slot plus the embedded student list
+   (roll, real name, real email). No per-student lookups.
 4. Caches the **entire set** of classes (rosters + timetable slots) into
    `localStorage` in one write — new key alongside the existing
    `ROSTER_KEY`, since now there's a list of rosters to choose from, not
@@ -78,19 +82,62 @@ specific class" — that grouping has to be defined and stored separately
 6. Re-login only pulls fresh data if the staff explicitly wants to
    re-sync (e.g. timetable changed mid-term) — not on every session.
 
+## Scale: ~500 staff (stated 2026-10-06)
+
+Target: about 500 staff, each with their own timetable and per-class
+student lists. Server holds all of it; a staff member only ever sees their
+own. **Hard rule: after the first login everything is cached on the phone
+and no internet is needed again.**
+
+- **Embed rosters in class docs (done above).** Resolving each student
+  from `students/{rollNo}` would cost ~600 reads per login (10 classes ×
+  60 students); 500 staff logging in on one day would blow past Firestore's
+  free 50,000 reads/day. With rosters embedded, a login is ~10 reads (1
+  staff doc + ~8–10 class docs), so even all 500 on the same day is ~5,000
+  reads — comfortably free. A class doc is ~10 KB (well under the 1 MiB doc
+  limit).
+- **Access rule:** a staff member can read `staff/{their email}` and only
+  class docs whose `staffEmails` contains their email
+  (`request.auth.token.email in resource.data.staffEmails`). Storing
+  `staffEmails` on the class doc avoids a second `get()` per read inside the
+  rule. A student account has no staff doc and is in no `staffEmails`, so
+  it gets nothing — this is also what finally separates staff from
+  students; the current client-side sign-in gate accepts any
+  `@rajalakshmi.edu.in` account and can't.
+- **Stale data / re-sync:** because of the no-internet-after-first-login
+  rule, server-side timetable changes never reach a phone by themselves.
+  Needs an explicit "Re-sync (needs internet)" button; nothing automatic.
+- **Shared/passed-around phones:** the cache holds real student names and
+  emails. Sign-out today only clears the login (`rollcall_user_v1`). Must
+  also wipe the cached classes on sign-out, and discard the cache if a
+  different email signs in than the one it was cached for.
+- **Cache size:** ~10 classes × ~100 students × ~150 bytes ≈ 150 KB —
+  fits `localStorage`'s ~5 MB; IndexedDB not needed.
+- **Auth detail to verify before building:** Firestore security rules need
+  a Firebase Auth token, but P3's gate uses plain Google Identity
+  Services. The usual bridge is `signInWithCredential` with the Google ID
+  token the gate already receives (so staff aren't prompted twice), but
+  that requires the token's OAuth client ID (P1's) to be accepted by the
+  Firebase project's Google provider. **Not verified yet — check first.**
+  Load the Firebase SDK lazily, only on first login / re-sync, so normal
+  sessions stay fully offline.
+- **Loading the data:** a one-time admin import script (Firebase Admin SDK,
+  run from a trusted machine) that builds `staff/*` and `classes/*` from
+  the DigiCampus export (staff list, timetable slots, per-class rosters).
+  The export itself is the blocker.
+
 ## What's actually blocking the build
 
-Not code — data and two deferred decisions:
+Not code — data and one deferred decision:
 
 - No Firebase project exists yet (an account-level step only the project
   owner can do — same category of action as the GitHub org created earlier
   in this session for a cleaner P3 URL).
 - No real department DB in hand yet (flat roll/name/email export).
 - No real staff→class/timetable assignment data in hand yet.
-- **Deferred, not yet decided:** sign-in method — reuse P1's existing
-  Google Sign-In identity (one system, same account everywhere) vs. a
-  separate login just for P3 (keeps P3 fully standalone, matching its
-  "independent project" instruction, but a second login for staff).
+- **Resolved:** sign-in method — P3 has its own Google Identity Services
+  login gate (built 2026-10-02/03, live), using P1's OAuth client ID. See
+  the Firebase Auth bridging note under "Scale" for the remaining detail.
 - **Deferred, not yet decided:** how rosters/timetable data actually get
   uploaded into Firestore in the first place — a CSV-paste admin tool
   (reusable every term) vs. manual entry directly in Firebase's console

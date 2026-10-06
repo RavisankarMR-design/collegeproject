@@ -221,9 +221,24 @@ Full detail in `FIREBASE-ROSTER-PLAN.md` in this folder. Summary:
   timetable slot; staff can still tap a different one manually. Re-login
   only on explicit re-sync request.
 - **Data model:** `staff/{email}` → `staff/{email}/classes` (assigned
-  class IDs) → `classes/{classId}` (roll list + timetable slot — the part
-  the flat DB can't provide) → `students/{rollNo}` (real name/email
-  lookup, replaces `guessEmail()`).
+  class IDs) → `classes/{classId}` (`staffEmails`, timetable slot, and the
+  **full student list embedded**: `[{roll, name, email}]` — the part the
+  flat DB can't provide). `students/{rollNo}` is the admin-side source the
+  import copies from, not read by the app at login. Real name/email
+  replaces `guessEmail()`.
+- **Scale (stated 2026-10-06): ~500 staff**, each with a timetable and
+  per-class student lists; a staff member only ever sees their own.
+  **Hard rule: after the first login everything is cached on the phone, no
+  internet needed again.** Consequences recorded in
+  `FIREBASE-ROSTER-PLAN.md` "Scale" section: embed rosters in class docs
+  (~10 reads/login instead of ~600, keeps all-500-on-one-day under the free
+  50k reads/day); rule = read only classes whose `staffEmails` has your
+  email (which also finally separates staff from students — the current
+  gate lets any college account in); explicit "Re-sync" button needed since
+  nothing refreshes automatically; sign-out must wipe the cached classes
+  (shared phones hold real student names/emails); verify Firestore rules'
+  Firebase-Auth requirement can reuse the existing Google ID token before
+  building; import via one-time admin script from the DigiCampus export.
 - **Blocked on:** no Firebase project created yet (account-level step,
   same category as the GitHub org above), no real department DB in hand,
   no real staff/timetable data in hand. **Sign-in method is resolved** —
