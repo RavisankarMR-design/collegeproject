@@ -230,9 +230,12 @@ Full detail in `FIREBASE-ROSTER-PLAN.md` in this folder. Summary:
   per-class student lists; a staff member only ever sees their own.
   **Hard rule: after the first login everything is cached on the phone, no
   internet needed again.** Consequences recorded in
-  `FIREBASE-ROSTER-PLAN.md` "Scale" section: embed rosters in class docs
-  (~10 reads/login instead of ~600, keeps all-500-on-one-day under the free
-  50k reads/day); rule = read only classes whose `staffEmails` has your
+  `FIREBASE-ROSTER-PLAN.md` "Scale" section. Owner's mental model (keep it
+  this simple): Firebase stores the data and gives each staff only their
+  own; phone caches it at first login. "Reads" are just Firebase's usage
+  meter — build so a login is a handful of fetches (embed rosters in class
+  docs), nothing for the owner to manage. Rule = read only classes whose
+  `staffEmails` has your
   email (which also finally separates staff from students — the current
   gate lets any college account in); explicit "Re-sync" button needed since
   nothing refreshes automatically; sign-out must wipe the cached classes

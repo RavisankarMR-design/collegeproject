@@ -89,13 +89,13 @@ student lists. Server holds all of it; a staff member only ever sees their
 own. **Hard rule: after the first login everything is cached on the phone
 and no internet is needed again.**
 
-- **Embed rosters in class docs (done above).** Resolving each student
-  from `students/{rollNo}` would cost ~600 reads per login (10 classes ×
-  60 students); 500 staff logging in on one day would blow past Firestore's
-  free 50,000 reads/day. With rosters embedded, a login is ~10 reads (1
-  staff doc + ~8–10 class docs), so even all 500 on the same day is ~5,000
-  reads — comfortably free. A class doc is ~10 KB (well under the 1 MiB doc
-  limit).
+- **Store each class with its student list inside it (done above), so one
+  fetch returns a whole class.** Plain flow: Firebase holds the data and
+  hands each staff member only their own; the phone saves it all at first
+  login. (Firebase meters usage in "reads" — one per record fetched; free
+  plan is 50,000/day. Embedding keeps a login to ~10 fetches, so usage
+  stays far under the free limit. No action needed beyond building it this
+  way.)
 - **Access rule:** a staff member can read `staff/{their email}` and only
   class docs whose `staffEmails` contains their email
   (`request.auth.token.email in resource.data.staffEmails`). Storing
