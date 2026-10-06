@@ -251,6 +251,32 @@ Full detail in `FIREBASE-ROSTER-PLAN.md` in this folder. Summary:
   deferred: how rosters get uploaded into Firestore initially (CSV-paste
   admin tool vs. manual Firebase-console entry).
 
+## Known limitation: proxy scans via screen images (discussed 2026-10-06, not fixed)
+
+Staff want to keep passing the phone to students to scan their own cards.
+**A photo of a friend's ID on another phone screen scans exactly like the
+real card**, and since the barcode is just the roll number (not secret,
+sequential), anyone can generate one for any classmate even without their
+card. The camera can't tell card from screen or whose hand holds it. Same
+class of limit as P1's "one person, two phones" — inherent to ID-barcode
+scanning, not a bug. Detecting "this is a screen" reliably isn't realistic
+in a free offline web page and would flag honest students.
+
+Mitigations, cheapest first (**none built yet — saved for later**):
+1. **Head-count check:** app already shows `scanned / roster` (e.g. 42/60).
+   Staff compare with people actually in the room; scanned > present =
+   proxies. Possible small feature: a "people present" box that warns when
+   the scan count exceeds it. Offered, not requested yet.
+2. Keep the phone in staff's view instead of fully handing it over — a held-
+   up phone screen is then obvious.
+3. Make the scanned name larger / linger longer on screen (already shows
+   "Added: roll — name") so a proxy scan is visible to the whole class.
+4. Show student photo on scan (needs photos in the DigiCampus export; only
+   helps if someone is watching).
+Real fix = unforgeable, expiring credential (P3 v2 signed rotating QR
+below) — still can't stop a friend sending a live code from their own
+phone, and changes the whole "scan ID cards" model.
+
 ## Related ideas discussed, not part of this project
 
 - **P3 v2 (signed rotating QR):** discussed as a way to make attendance
