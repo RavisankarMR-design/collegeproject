@@ -521,24 +521,39 @@ function fullRollNo(rollNo) {
 // Guessed from a real example (ravisankar.mr.2024.cse@rajalakshmi.edu.in for
 // "Ravi Sankar M R", roll 240701424): firstname+middlename run together,
 // trailing 1-2 letter initial words joined separately, then .year.dept.
+// Pattern, verified against the college directory by the owner (Gmail
+// autocomplete, 2026-10-08) for names ending in initials in every department
+// and for names starting with initials: name words run together + "." +
+// initials (1-2 letter words, wherever they sit in the name) + ".year.dept".
+//   "Ravi Sankar M R" -> ravisankar.mr.2024.cse   "V Aakash Velan" -> aakashvelan.v.2024.aiml
 // Department part: the owner's short codes, picked from digits 3-4 of the roll
 // number (2407.. = CSE, 2415.. = AI&ML, ...; that mapping is exact in the real
-// DigiCampus data). Only CSE's "cse" is verified against a real email; the
-// others are the owner's stated abbreviations, unconfirmed. A roll with an
-// unknown department code gets a blank email rather than a wrong one. Also
-// wrong for any name that doesn't end in short initials (e.g. a name that
-// starts with them, or a real surname like "Subedi") — a best-effort guess,
-// not verified data, until a real roll->email list replaces it.
+// DigiCampus data). A roll with an unknown department code gets a blank email
+// rather than a wrong one. Still a guess for names that don't fit (e.g. a real
+// short surname like "Subedi" is fine, but a 1-2 letter given name would be
+// treated as an initial) until a real roll->email list replaces it.
 const DEPT_CODES = { '03': 'bme', '07': 'cse', '11': 'mech', '12': 'mct', '14': 'csbs', '15': 'aiml', '18': 'aids' };
 function guessEmail(name, rollNo) {
   const dept = DEPT_CODES[String(rollNo).slice(2, 4)];
   if (!name || !dept) return '';
-  const words = name.trim().split(/\s+/);
-  let splitAt = words.length;
-  while (splitAt > 0 && /^[A-Za-z]{1,2}$/.test(words[splitAt - 1])) splitAt--;
-  if (splitAt === 0) splitAt = words.length; // whole name was short tokens: don't split into nothing
-  const first = words.slice(0, splitAt).join('').toLowerCase();
-  const initials = words.slice(splitAt).join('').toLowerCase();
+  // any non-letter (space, dot, stray punctuation) is a word break: "S.G Jenell" -> S, G, Jenell
+  const words = name.split(/[^A-Za-z]+/).filter(Boolean);
+  if (!words.length) return '';
+  const isInitial = (w) => /^[A-Za-z]{1,2}$/.test(w);
+  let lead = 0;
+  while (lead < words.length && isInitial(words[lead])) lead++;
+  let first, initials;
+  if (lead === words.length) { // nothing but short words: don't split into nothing
+    first = words.join('');
+    initials = '';
+  } else {
+    let trail = 0;
+    while (trail < words.length - lead && isInitial(words[words.length - 1 - trail])) trail++;
+    first = words.slice(lead, words.length - trail).join('');
+    initials = [...words.slice(0, lead), ...words.slice(words.length - trail)].join('');
+  }
+  first = first.toLowerCase();
+  initials = initials.toLowerCase();
   const year = '20' + rollNo.slice(0, 2);
   const local = initials ? `${first}.${initials}.${year}.${dept}` : `${first}.${year}.${dept}`;
   return `${local}@rajalakshmi.edu.in`;

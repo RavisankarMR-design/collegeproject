@@ -132,7 +132,20 @@ match that one real example exactly. **Known to misfire**:
   surname like "Subedi" instead of Tamil-style initials) gets no `.initials`
   segment and is more likely wrong.
 
-**Update (2026-10-08, later): department codes added.** `guessEmail()` now picks
+**Update (2026-10-08, latest): the guess is now directory-verified.** The owner
+checked guessed addresses against the college directory with Gmail's "To"
+autocomplete on the college account (it shows the person's name + roll number
+for a real address): 11 addresses across all 7 departments matched exactly,
+including names that START with initials ("V Aakash Velan" ->
+`aakashvelan.v.2024.aiml`, "S Attana" -> `attana.s.2024.aids`, "S Adhithya" ->
+`adhithya.s.2024.cse`): leading initials move to the end like trailing ones. Any
+non-letter (dot, stray punctuation) is a word break ("S.G Jenell" ->
+`jenell.sg…`). All 1,677 real students produce a well-formed address. Still a
+guess for the rest (11 of 1,677 verified); this directory check is the quick way
+to verify more. This browser's Gmail is the owner's personal account, not the
+college one, so the check has to be run by the owner on the college account.
+
+**Update (2026-10-08, earlier): department codes added.** `guessEmail()` now picks
 the code from digits 3-4 of the roll number using the owner's abbreviations:
 03 `bme`, 07 `cse`, 11 `mech`, 12 `mct`, 14 `csbs`, 15 `aiml`, 18 `aids`; an
 unknown code gives a blank email. Only `cse` is verified against a real email
