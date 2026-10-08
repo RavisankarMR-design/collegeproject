@@ -776,8 +776,10 @@ if (rows.length > 0) setStatus(`Restored ${rows.length} scan${rows.length === 1 
 // Each staff member sees only their own classes. Tapping one loads that class's
 // roster (only those roll numbers can be scanned) and starts the camera. The
 // list is fetched once at sign-in and cached; every session after is offline.
-// The cache holds real student names, and these phones get passed around, so it
-// is wiped on sign-out and discarded if a different account signs in.
+// The cache is kept permanently (until the same account re-syncs) so staff can work
+// offline forever after one sign-in. It holds real student names, so it is
+// discarded if a different account signs in, and the phone's PIN lock covers
+// the passed-around case.
 const classEls = {
   card: document.getElementById('classes-card'),
   list: document.getElementById('class-list'),
@@ -918,19 +920,27 @@ function showApp(user) {
   document.body.classList.remove('login-pending');
   loginEls.signedInAs.style.display = 'block';
   loginEls.signedInAs.innerHTML = `Signed in as ${escapeHtml(user.email)} · <a href="#" id="sign-out-link">Sign out</a>`;
-  document.getElementById('sign-out-link').addEventListener('click', (e) => { e.preventDefault(); signOut(); });
+  document.getElementById('sign-out-link').addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (await askConfirm('Sign out? Your classes stay saved on this phone, but you need internet to sign in again.')) signOut();
+  });
   myClasses = cachedClassesFor(user.email);
   renderClassList();
+  // Ask the browser not to evict the saved classes when the phone runs low on
+  // space (installed apps are usually granted this automatically).
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 }
 
+// Signing out only ends the login. The saved classes stay on the phone for
+// offline use; they are replaced when the same account re-syncs, and wiped if a
+// different account signs in (see handleCredentialResponse).
 function signOut() {
   try { localStorage.removeItem(LOGIN_KEY); } catch { /* not critical */ }
-  wipeClassData();
   location.reload();
 }
 document.getElementById('resync-link').addEventListener('click', async (e) => {
   e.preventDefault();
-  if (await askConfirm('Re-sync signs you out and back in to download your classes again. It needs internet. Continue?')) signOut();
+  if (await askConfirm('Re-sync signs you out and back in to download your classes again. You need internet to sign back in; your saved classes stay on this phone until the new ones arrive. Continue?')) signOut();
 });
 
 function showLoginScreen() {

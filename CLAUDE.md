@@ -250,9 +250,16 @@ would have published 1,677 students' names/roll numbers and 22 staff emails.
   in `app.js`, `FIREBASE_CONFIG` set to project `rec-scan`. The old "Trial
   Class 1" rejection text is now `activeClassLabel`. If the class fetch
   fails, the card shows the Firebase error code and the Trial Class 1
-  button still works. **Behavior change:** sign-out now
-  also wipes the cached classes and the loaded roster (student names on
-  shared phones); scanned roll numbers stay.
+  button still works. **Permanent offline cache (owner's requirement,
+  2026-10-08):** after one sign-in the staff member's classes and student
+  lists stay saved on the phone for good. Sign-out only ends the login (after a
+  confirm) and keeps the classes, roster and selected class; the same account
+  signing back in sees them instantly, and a failed re-sync never erases them.
+  They are replaced only by a successful re-sync, and wiped only when a
+  *different* account signs in. The app also calls `navigator.storage.persist()`
+  so the browser doesn't evict them under storage pressure. Trade-off the
+  owner accepted: student names remain on the phone after sign-out, protected
+  by the phone lock and the staff PIN, not by signing out.
 - **Firebase (done, see FIREBASE-ROSTER-PLAN.md):** project `rec-scan`
   (Spark, Mumbai), 51 classes imported, rules published and tested live (12
   checks), one-time admin key revoked. **Not yet verified:** a *real* Google
@@ -300,8 +307,8 @@ Full detail in `FIREBASE-ROSTER-PLAN.md` in this folder. Summary:
   `staffEmails` has your
   email (which also finally separates staff from students — the current
   gate lets any college account in); explicit "Re-sync" button needed since
-  nothing refreshes automatically; sign-out must wipe the cached classes
-  (shared phones hold real student names/emails); verify Firestore rules'
+  nothing refreshes automatically; (superseded 2026-10-08: the cache is now
+  permanent and sign-out keeps it, see the class picker section); verify Firestore rules'
   Firebase-Auth requirement can reuse the existing Google ID token before
   building; import via one-time admin script from the DigiCampus export.
 - **Blocked on:** no Firebase project created yet (account-level step,

@@ -108,9 +108,10 @@ and no internet is needed again.**
   rule, server-side timetable changes never reach a phone by themselves.
   Needs an explicit "Re-sync (needs internet)" button; nothing automatic.
 - **Shared/passed-around phones:** the cache holds real student names and
-  emails. Sign-out today only clears the login (`rollcall_user_v1`). Must
-  also wipe the cached classes on sign-out, and discard the cache if a
-  different email signs in than the one it was cached for.
+  emails. **Decision changed 2026-10-08:** the owner wants the cache kept
+  permanently after one sign-in, so sign-out only ends the login and keeps
+  the classes (the phone lock and staff PIN cover the passed-around case).
+  The cache is still discarded if a *different* email signs in.
 - **Cache size:** ~10 classes × ~100 students × ~150 bytes ≈ 150 KB —
   fits `localStorage`'s ~5 MB; IndexedDB not needed.
 - **Auth detail to verify before building:** Firestore security rules need
@@ -183,8 +184,9 @@ that changed in this plan:
 - **Built in the app** (`app.js`, `index.html`): after sign-in, a "Your
   classes" list; tapping one loads that roster (only those roll numbers can
   be scanned) and starts the camera; switching class with scans present asks
-  first and clears them; list cached for offline; wiped on sign-out and when
-  a different account signs in; "Re-sync" = sign out + in. `FIREBASE_CONFIG`
+  first and clears them; list cached for offline permanently (kept across sign-out, replaced only by
+  a successful re-sync, wiped only when a different account signs in; the
+  app also requests persistent browser storage); "Re-sync" = sign out + in. `FIREBASE_CONFIG`
   in `app.js` is now set to the real project, so every fresh sign-in loads
   the Firebase SDK from Google and fetches that account's classes.
 - **The class data file is private and deliberately outside this repo**:
@@ -229,7 +231,8 @@ that changed in this plan:
   audience, the client-ID allowlist isn't being honored and the fallback is
   to switch the gate to Firebase's own Google sign-in.
 - Not tested on a real phone: the class picker, class switching, offline use
-  after first sign-in, and the sign-out wipe.
+  after first sign-in, and that saved data survives sign-out and phone
+  restarts.
 
 ### Warning: P1's Google Cloud project now has Firebase attached
 
