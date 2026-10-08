@@ -197,9 +197,12 @@ blocked exactly as described below.
   service worker on `localhost`): no-session gate, wrong-domain
   rejection, valid sign-in, cached-session reload, fully-offline reload,
   sign-out. Export format and scan flow spot-checked unaffected. **The
-  real sign-in popup itself (picking an account, completing consent) is
-  not yet tested end-to-end** — it needs a real @rajalakshmi.edu.in login,
-  which has to be done by hand on a phone.
+  real sign-in popup (picking an account, completing consent) was tested
+  by the project owner on a real phone and confirmed working
+  (2026-10-08).** Not yet checked on a real phone: the fully-offline
+  reopen after signing in, and wrong-domain rejection with a real
+  non-college Google account (both only verified headless with fake
+  tokens).
 
 ## Firebase roster-sync plan (not built — see FIREBASE-ROSTER-PLAN.md)
 
