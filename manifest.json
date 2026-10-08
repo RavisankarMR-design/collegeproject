@@ -1,5 +1,5 @@
 {
-  "name": "REC Attendance Scanner",
+  "name": "REC Scan",
   "short_name": "REC Scan",
   "description": "Scan student ID barcodes continuously and export the roll list to Excel.",
   "start_url": "./index.html",

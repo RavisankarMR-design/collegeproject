@@ -1,4 +1,4 @@
-# Project 3 — REC Attendance Scanner — Project Notes
+# Project 3 — REC Scan — Project Notes
 
 Standalone barcode-scan-to-Excel PWA. Independent of the attendance web app
 (Project 1) in this same repo — three separate deliverables per staff's
@@ -32,16 +32,14 @@ libraries.
 ## Naming (2026-10-08)
 
 Renamed from "ID Barcode Roll Call" ("Roll Call" read as an informal school
-phrase and isn't what the college's own data calls it — the export and
-DigiCampus format say "Attendance"). Current names:
+phrase and isn't what the college's own data calls it). Final name, chosen
+by the project owner: **"REC Scan"** — everywhere: `<title>`, splash, page
+heading, `manifest.json` `name` and `short_name`, and the
+`apple-mobile-web-app-title` meta tag. (An earlier same-day pass used "REC
+Attendance Scanner" as the long name; dropped in favor of the short one.)
+It's 8 characters, so it also fits the home-screen label — launchers cut
+labels longer than about 12 characters (guidance from several PWA sources).
 
-- **Full name: "REC Attendance Scanner"** — `<title>`, splash, page
-  heading, `manifest.json` `name`. Says what it is, and avoids naming one
-  scan method (barcode) so it still fits if the signed-QR idea happens.
-- **Home-screen label: "REC Scan"** — `manifest.json` `short_name` and the
-  `apple-mobile-web-app-title` meta tag. Kept ≤12 characters because
-  launchers truncate longer icon labels (guidance from several PWA
-  sources); "REC Attendance" is 14 and would be cut.
 - **Deliberately NOT renamed:** the `rollcall_*` localStorage keys (renaming
   would wipe every phone's saved scans, roster and PIN) and the
   `RollCall_<timestamp>` default export filename (staff may already file
