@@ -231,6 +231,20 @@ that changed in this plan:
   staff: a test bug — the client SDK returns each student's fields in a
   different key order; compared order-independently, all 51 matched.)
 
+### Extra access granted by hand (2026-10-08)
+
+The owner's own student account, `ravisankar.mr.2024.cse@rajalakshmi.edu.in`,
+was added as a second entry in `staffEmails` on **one** class only:
+`CB23F35__CSE_2024_Group_1` (Trial Class 1, Bhuvaneswaran B's lecture group, 140
+students), because Bhuvaneswaran sometimes asks the owner to take attendance.
+Done in the Firebase console (Firestore > classes > that document > staffEmails
+> add entry); no other class and no student data changed. **A re-import
+overwrites `staffEmails`**, so the private data file
+(`../p3-private-data/classes-import.json`) was edited to include the email too;
+regenerating that file from the workbook would drop it, so re-add it. To give
+someone else access to a class, add their lowercase email to that class's
+`staffEmails` the same way.
+
 ### Still NOT verified
 
 - **A real Google ID token being accepted by Firebase.** Everything up to

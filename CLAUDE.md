@@ -268,6 +268,11 @@ would have published 1,677 students' names/roll numbers and 22 staff emails.
   checks), one-time admin key revoked. **Not yet verified:** a *real* Google
   ID token being accepted by Firebase (only a fake one was rejected with
   `auth/invalid-credential`), and the picker on a real phone.
+- **Extra access (2026-10-08):** the owner's student account
+  `ravisankar.mr.2024.cse@rajalakshmi.edu.in` is also in `staffEmails` of
+  `CB23F35__CSE_2024_Group_1` only (Trial Class 1), added in the Firebase
+  console, so it sees just that class. A re-import overwrites it; see
+  FIREBASE-ROSTER-PLAN.md.
 - **Do not delete "My First Project"** (Google Cloud project that owns P1's
   login): Firebase got attached to it by mistake and deleting either would
   delete both. P3's data is in the separate `rec-scan` project.
