@@ -808,13 +808,21 @@ function wipeClassData() {
 
 const prettyClass = (name) => name.replace(/_/g, ' ');
 
+// Classes whose student names are expanded ("View students"); kept across re-renders.
+const expandedClasses = new Set();
+
 function renderClassList() {
   classEls.card.style.display = myClasses.length ? 'block' : 'none';
-  classEls.list.innerHTML = myClasses.map((c, i) => `
+  classEls.list.innerHTML = myClasses.map((c, i) => {
+    const open = expandedClasses.has(c.name);
+    return `
     <button class="secondary class-btn${trialActive && activeClassLabel === c.name ? ' active' : ''}" data-i="${i}">
       <span>${escapeHtml(prettyClass(c.name))}</span>
       <small>${escapeHtml(c.component)} · ${c.students.length} students</small>
-    </button>`).join('');
+    </button>
+    <a href="#" class="view-students" data-i="${i}">${open ? 'Hide students' : 'View students'}</a>
+    ${open ? `<ul class="list student-preview">${c.students.map((st) => `<li><span><span class="roll">${escapeHtml(st.roll)}</span> — ${escapeHtml(st.name)}</span></li>`).join('')}</ul>` : ''}`;
+  }).join('');
 }
 
 function setClassStatus(text, kind) {
@@ -847,6 +855,14 @@ async function selectClass(cls) {
   if (!scanning) startScanning();
 }
 classEls.list.addEventListener('click', (e) => {
+  const link = e.target.closest('a.view-students');
+  if (link) {
+    e.preventDefault();
+    const name = myClasses[Number(link.dataset.i)].name;
+    expandedClasses.has(name) ? expandedClasses.delete(name) : expandedClasses.add(name);
+    renderClassList();
+    return;
+  }
   const btn = e.target.closest('button.class-btn');
   if (btn) selectClass(myClasses[Number(btn.dataset.i)]);
 });

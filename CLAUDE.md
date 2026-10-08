@@ -268,6 +268,10 @@ would have published 1,677 students' names/roll numbers and 22 staff emails.
   checks), one-time admin key revoked. **Not yet verified:** a *real* Google
   ID token being accepted by Firebase (only a fake one was rejected with
   `auth/invalid-credential`), and the picker on a real phone.
+- **View students (2026-10-08):** each class in the picker has a "View
+  students" link that expands its names (roll — name, scrollable) without
+  selecting the class; selecting keeps it open; "Hide students" collapses it.
+  State is the `expandedClasses` Set in `app.js`.
 - **Extra access (2026-10-08):** the owner's student account
   `ravisankar.mr.2024.cse@rajalakshmi.edu.in` is also in `staffEmails` of
   `CB23F35__CSE_2024_Group_1` only (Trial Class 1), added in the Firebase
