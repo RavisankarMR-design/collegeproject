@@ -30,11 +30,17 @@ const STORAGE_KEY = 'rollcall_state_v1';
 const ROSTER_KEY = 'rollcall_roster_v1';
 const TRIAL_ACTIVE_KEY = 'rollcall_trial_active_v1';
 const CLASSES_KEY = 'rollcall_classes_v1';
-// Staff -> classes come from Firestore (see FIREBASE-ROSTER-PLAN.md). Paste the
-// web-app config object from Firebase console -> Project settings -> Your apps.
-// While this is null nothing is fetched and the old Trial Class 1 flow is all
-// that shows, so deploying before the project exists changes nothing for staff.
-const FIREBASE_CONFIG = null;
+// Staff -> classes come from Firestore (see FIREBASE-ROSTER-PLAN.md), project
+// "rec-scan". These values are public identifiers, not secrets: Firebase
+// protects the data with firebase/firestore.rules, not by hiding this config.
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyDrjAGuBUqtJbRXWDa7AVw7Jn8OyK4bGoA',
+  authDomain: 'rec-scan.firebaseapp.com',
+  projectId: 'rec-scan',
+  storageBucket: 'rec-scan.firebasestorage.app',
+  messagingSenderId: '399324732813',
+  appId: '1:399324732813:web:fe3e9aa487b3d313c6b1c4',
+};
 const FIREBASE_SDK_VERSION = '13.0.0';
 // Roll numbers are always "24" + 7 digits (e.g. 240701424) — only the first
 // two digits are fixed, the other 7 vary per year/department/student.
@@ -870,8 +876,9 @@ async function syncClasses(idToken, email) {
     renderClassList();
     setClassStatus(classes.length ? '' : 'No classes are assigned to this account.', classes.length ? 'info' : 'err');
     if (!classes.length) classEls.card.style.display = 'block';
-  } catch {
-    setClassStatus('Could not load your classes — check your internet connection, then sign out and back in.', 'err');
+  } catch (err) {
+    console.warn('class sync failed', err);
+    setClassStatus(`Could not load your classes (${err && (err.code || err.message) || 'unknown error'}). Needs internet at sign-in; you can still use the Trial Class 1 button below.`, 'err');
   }
 }
 

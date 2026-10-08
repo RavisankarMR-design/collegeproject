@@ -224,7 +224,7 @@ blocked exactly as described below.
   non-college Google account (both only verified headless with fake
   tokens).
 
-## Staff class picker (2026-10-08 — app side built, waiting on a Firebase project)
+## Staff class picker (2026-10-08 — built, Firebase set up, real sign-in untested)
 
 Owner's plan: each staff member signs in, sees only their own classes and
 student lists, taps a class, scanning starts. Owner chose **Firebase
@@ -247,14 +247,20 @@ would have published 1,677 students' names/roll numbers and 22 staff emails.
   Intake Name format; Bhuvaneswaran B (101077) vs Bhuvaneswari R (101327)
   differ by one letter — always key on email/ID, never the name.
 - **App:** `#classes-card` / `selectClass()` / `fetchClassesFromFirestore()`
-  in `app.js`. Inert while `FIREBASE_CONFIG` is `null` (current state), so
-  staff still just see the Trial Class 1 flow. The old "Trial Class 1"
-  rejection text is now `activeClassLabel`. **Behavior change:** sign-out now
+  in `app.js`, `FIREBASE_CONFIG` set to project `rec-scan`. The old "Trial
+  Class 1" rejection text is now `activeClassLabel`. If the class fetch
+  fails, the card shows the Firebase error code and the Trial Class 1
+  button still works. **Behavior change:** sign-out now
   also wipes the cached classes and the loaded roster (student names on
   shared phones); scanned roll numbers stay.
-- **Not yet verified:** anything touching real Firebase (SDK load,
-  `signInWithCredential` with P1's token, the Firestore rules). Tested
-  headless with real data for one staff account: 16 checks.
+- **Firebase (done, see FIREBASE-ROSTER-PLAN.md):** project `rec-scan`
+  (Spark, Mumbai), 51 classes imported, rules published and tested live (12
+  checks), one-time admin key revoked. **Not yet verified:** a *real* Google
+  ID token being accepted by Firebase (only a fake one was rejected with
+  `auth/invalid-credential`), and the picker on a real phone.
+- **Do not delete "My First Project"** (Google Cloud project that owns P1's
+  login): Firebase got attached to it by mistake and deleting either would
+  delete both. P3's data is in the separate `rec-scan` project.
 - **Private data lives outside the repo:** `../p3-private-data/classes-import.json`.
 
 ## Firebase roster-sync plan (not built — see FIREBASE-ROSTER-PLAN.md)

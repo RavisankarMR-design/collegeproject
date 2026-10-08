@@ -184,38 +184,59 @@ that changed in this plan:
   classes" list; tapping one loads that roster (only those roll numbers can
   be scanned) and starts the camera; switching class with scans present asks
   first and clears them; list cached for offline; wiped on sign-out and when
-  a different account signs in; "Re-sync" = sign out + in. Tested with real
-  data for one staff member (16 checks, headless). **Inert until
-  `FIREBASE_CONFIG` in `app.js` is set** — while it is `null` nothing is
-  fetched and staff only see the existing Trial Class 1 flow.
-- **Written but NOT yet run against a real project:**
-  `firebase/firestore.rules` (read only if the verified email is in the
-  class's `staffEmails`; no client writes) and `firebase/import-classes.js`
-  (Admin SDK, idempotent, 51 docs in one batch). This machine has no Java so
-  the Firestore emulator can't test the rules locally; test them in the
-  Firebase console's Rules Playground, or install a JDK to use the emulator.
+  a different account signs in; "Re-sync" = sign out + in. `FIREBASE_CONFIG`
+  in `app.js` is now set to the real project, so every fresh sign-in loads
+  the Firebase SDK from Google and fetches that account's classes.
 - **The class data file is private and deliberately outside this repo**:
-  `../p3-private-data/classes-import.json` (regenerate from the combined
-  workbook with the export script if the DigiCampus data changes). Anything
-  inside this repo is world-readable on GitHub Pages, which is exactly why the
-  data goes in Firestore and not in the app.
+  `../p3-private-data/classes-import.json`. Anything inside this repo is
+  world-readable on GitHub Pages, which is exactly why the data lives in
+  Firestore and not in the app.
 
-### Setup steps (owner's Firebase console actions)
+### What was set up (2026-10-08, done in the owner's Firebase console)
 
-1. Create a Firebase project (ideally attach it to the **same Google Cloud
-   project that owns the P1 OAuth client**), add a **Web app**, copy its
-   `firebaseConfig` into `FIREBASE_CONFIG` in `app.js`.
-2. Build > Firestore Database > Create (production mode); paste
-   `firebase/firestore.rules` into Rules and publish.
-3. Build > Authentication > Sign-in method > enable **Google**; under that
-   provider allow P1's client ID (`194459417743-6idjf0…`) as an external/allowed
-   client ID — Firebase rejects a Google ID token whose audience it doesn't
-   know ("audience mismatch"). Console label varies by version. Also add
-   `ravisankarmr-design.github.io` under Authentication > Settings >
-   Authorized domains. **This bridge is the one unverified piece**; fallback
-   if it won't work: switch the sign-in gate to Firebase's own Google
-   sign-in (`signInWithPopup`) instead of reusing the GIS token.
-4. Project settings > Service accounts > generate a private key (keep it
-   OUT of the repo), then run `firebase/import-classes.js` with it.
-5. Test with a real staff account, and with a student account (must see no
-   classes).
+- **Firebase project `rec-scan`** (project number 399324732813, free Spark
+  plan, no billing, no organisation, Analytics / Gemini / Developer Programme
+  all off). Firestore `(default)` database, **Standard edition, production
+  mode, location `asia-south1` (Mumbai)** — permanent, can't be changed.
+  Web app "REC Scan" registered (its config is in `app.js`).
+- **Google sign-in enabled**, with P1's OAuth client ID
+  (`194459417743-6idjf0…`) added under "Whitelist client IDs from external
+  projects" so Firebase accepts the Google ID token P3's sign-in gate already
+  gets. Setting confirmed to persist across a page reload.
+- **`firebase/firestore.rules` published** and **tested against the live
+  database with 12 checks** (made-up identities carrying the same email
+  claims a Google sign-in produces): a staff member reads exactly their own
+  classes (full student lists); cannot read another staff's classes (tried
+  the near-identical "Bhuvaneswari R"), cannot list all classes, cannot
+  write or delete; a student account gets zero classes and cannot ask for a
+  staff member's; an unverified email is denied even with a staff address; a
+  signed-out visitor is denied; a mixed-case email still matches.
+- **51 classes imported** (3,354 student entries, 22 staff) and read back
+  from Firestore: identical to the local file. `firebase/import-classes.js`
+  was fixed on first real run (it used the old Admin SDK calling style that
+  current `firebase-admin` removed).
+- The one-time service-account key used for the import was **deleted from
+  the PC and revoked in Google Cloud**; the test identities were deleted.
+  Re-running an import later needs a fresh key (generate, use, revoke).
+
+### Still NOT verified
+
+- **A real Google ID token being accepted by Firebase.** Everything up to
+  that step is proven: the Firebase SDK loads in the browser, initializes
+  against `rec-scan`, and Firebase itself rejects a fake token
+  (`auth/invalid-credential`). With a real staff sign-in the class list
+  should appear; if instead it shows an `auth/...` error mentioning the
+  audience, the client-ID allowlist isn't being honored and the fallback is
+  to switch the gate to Firebase's own Google sign-in.
+- Not tested on a real phone: the class picker, class switching, offline use
+  after first sign-in, and the sign-out wipe.
+
+### Warning: P1's Google Cloud project now has Firebase attached
+
+While setting up, Firebase was added by mistake to the Google Cloud project
+"My First Project" (`project-d87abfba-7819-4e5c-810…`), which owns **P1's
+Google login client**. Firebase said this can't be undone and that deleting
+the Firebase project deletes the Google Cloud project too. Nothing was
+deleted or broken. **Never delete "My First Project" or its Firebase
+project** — it would take P1's login with it. P3's real data lives in the
+separate `rec-scan` project.
