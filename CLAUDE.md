@@ -132,6 +132,17 @@ match that one real example exactly. **Known to misfire**:
   surname like "Subedi" instead of Tamil-style initials) gets no `.initials`
   segment and is more likely wrong.
 
+**Decision (2026-10-08): keep the guessed emails for now; the owner will supply
+the real student email list later.** The three DigiCampus sheets contain no
+student emails (only staff emails, in Faculties.xlsx). Measured on the 1,677
+real students: 82% of names end in initials (the shape the one verified
+example, the owner's own address, fits), 10% start with initials, 8% have none,
+and 62% are not CSE so the hardcoded `.cse` is wrong for them. Open question
+for the owner: does the college upload match on email or on register ID (if
+register ID, the email column matters little)? When the real list arrives, join
+it by roll number, drop `guessEmail()`, and store `email` per student in the
+class documents (`students: [{roll, name, email}]`).
+
 This gets replaced with real verified email/name data once the actual
 flat department DB (see Firebase plan below) is available — `guessEmail()`
 is explicitly a stand-in, not the end state.
