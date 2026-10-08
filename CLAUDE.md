@@ -243,7 +243,10 @@ would have published 1,677 students' names/roll numbers and 22 staff emails.
   combined workbook are in `FIREBASE-ROSTER-PLAN.md`'s build-status section.
 - **Data quirks to remember:** DOBs appended to some student names (17,
   stripped before storing; never put DOBs on shared phones); faculty
-  "Sachin Adith 0" (stray 0, left as exported); AIDS rows use a different
+  "Sachin Adith 0" in the export was corrected to "Sachin Adith" (owner's call,
+  2026-10-08; his email sachinadith.nkn@… shows initials NKN; fixed in the
+  combined workbook, the class data and Firestore; the original Faculties.xlsx
+  is untouched); AIDS rows use a different
   Intake Name format; Bhuvaneswaran B (101077) vs Bhuvaneswari R (101327)
   differ by one letter — always key on email/ID, never the name.
 - **App:** `#classes-card` / `selectClass()` / `fetchClassesFromFirestore()`

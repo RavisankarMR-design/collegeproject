@@ -221,6 +221,16 @@ that changed in this plan:
   the PC and revoked in Google Cloud**; the test identities were deleted.
   Re-running an import later needs a fresh key (generate, use, revoke).
 
+- **All 22 staff checked against the live database (2026-10-08, second
+  one-time key, also revoked and deleted):** signing in as each staff
+  member's email returned exactly their own classes with student lists
+  identical to the file; each was refused another staff member's classes and
+  a list-everything query; across all 22, the 51 classes were delivered
+  exactly once each. Also corrected faculty "Sachin Adith 0" to "Sachin
+  Adith" in the database. (A first run showed "student list differs" for many
+  staff: a test bug — the client SDK returns each student's fields in a
+  different key order; compared order-independently, all 51 matched.)
+
 ### Still NOT verified
 
 - **A real Google ID token being accepted by Firebase.** Everything up to
