@@ -160,3 +160,62 @@ data-loading job, not a coding job.
   `students/{rollNo}` above is what replaces it with real data.
 - `roster-class1.js` / the paste-a-roster flow — this is the mechanism
   Firestore data would feed into, unchanged.
+
+## Build status (2026-10-08) — app side done, waiting on the Firebase project
+
+Real data arrived (DigiCampus exports: Faculties + two Zoho Creator course
+sheets). Analysis + the combined workbook are described in `CLAUDE.md`. What
+that changed in this plan:
+
+- **Dropped the `staff` collection and per-student lookups.** One collection,
+  `classes`, one document per class (id = `<courseCode>__<className>`) with
+  `staffEmails`, `students: [{roll, name}]`, `component`, `department`,
+  `parentGroup`, `timetable: null`. A staff member's whole login is a single
+  query: `classes where staffEmails array-contains <email>` (2–3 documents).
+- **Real numbers:** 51 class documents, 22 staff (2–3 classes each), 3,354
+  student entries, 158 KB total, largest document 6.3 KB.
+- **Student names are stored without the date of birth** DigiCampus appends to
+  same-named students ("Akshaya S (02/09/2006)"). 63 students share a name
+  with someone else, but only 2 such pairs sit in the same class, and the
+  roll number is always shown next to the name.
+- **Timetable is not in any export**, so classes are picked by tapping; no
+  auto-highlight by day/period yet.
+- **Built in the app** (`app.js`, `index.html`): after sign-in, a "Your
+  classes" list; tapping one loads that roster (only those roll numbers can
+  be scanned) and starts the camera; switching class with scans present asks
+  first and clears them; list cached for offline; wiped on sign-out and when
+  a different account signs in; "Re-sync" = sign out + in. Tested with real
+  data for one staff member (16 checks, headless). **Inert until
+  `FIREBASE_CONFIG` in `app.js` is set** — while it is `null` nothing is
+  fetched and staff only see the existing Trial Class 1 flow.
+- **Written but NOT yet run against a real project:**
+  `firebase/firestore.rules` (read only if the verified email is in the
+  class's `staffEmails`; no client writes) and `firebase/import-classes.js`
+  (Admin SDK, idempotent, 51 docs in one batch). This machine has no Java so
+  the Firestore emulator can't test the rules locally; test them in the
+  Firebase console's Rules Playground, or install a JDK to use the emulator.
+- **The class data file is private and deliberately outside this repo**:
+  `../p3-private-data/classes-import.json` (regenerate from the combined
+  workbook with the export script if the DigiCampus data changes). Anything
+  inside this repo is world-readable on GitHub Pages, which is exactly why the
+  data goes in Firestore and not in the app.
+
+### Setup steps (owner's Firebase console actions)
+
+1. Create a Firebase project (ideally attach it to the **same Google Cloud
+   project that owns the P1 OAuth client**), add a **Web app**, copy its
+   `firebaseConfig` into `FIREBASE_CONFIG` in `app.js`.
+2. Build > Firestore Database > Create (production mode); paste
+   `firebase/firestore.rules` into Rules and publish.
+3. Build > Authentication > Sign-in method > enable **Google**; under that
+   provider allow P1's client ID (`194459417743-6idjf0…`) as an external/allowed
+   client ID — Firebase rejects a Google ID token whose audience it doesn't
+   know ("audience mismatch"). Console label varies by version. Also add
+   `ravisankarmr-design.github.io` under Authentication > Settings >
+   Authorized domains. **This bridge is the one unverified piece**; fallback
+   if it won't work: switch the sign-in gate to Firebase's own Google
+   sign-in (`signInWithPopup`) instead of reusing the GIS token.
+4. Project settings > Service accounts > generate a private key (keep it
+   OUT of the repo), then run `firebase/import-classes.js` with it.
+5. Test with a real staff account, and with a student account (must see no
+   classes).

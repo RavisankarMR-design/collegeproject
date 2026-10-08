@@ -290,3 +290,8 @@ body.login-pending > *:not(#login-screen):not(#splash) { display: none; }
 body.locked .lock-banner { display: block; }
 body.locked .lockable { display: none !important; }
 .pin-panel { margin-top: 10px; }
+
+/* Staff's own classes (from the roster sync): one tap loads the roster and starts scanning. */
+.class-btn { display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; }
+.class-btn small { color: var(--text-dim); font-weight: 500; white-space: nowrap; }
+.class-btn.active { border-color: var(--accent); background: var(--surface-2); }

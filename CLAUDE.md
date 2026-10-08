@@ -224,6 +224,39 @@ blocked exactly as described below.
   non-college Google account (both only verified headless with fake
   tokens).
 
+## Staff class picker (2026-10-08 — app side built, waiting on a Firebase project)
+
+Owner's plan: each staff member signs in, sees only their own classes and
+student lists, taps a class, scanning starts. Owner chose **Firebase
+(private server)** over bundling the data in the app, because anything
+shipped inside the app is readable by anyone with the link (confirmed: the
+bundled roster file downloads with a plain `curl`, no login) — bundling
+would have published 1,677 students' names/roll numbers and 22 staff emails.
+
+- **Data source:** DigiCampus exports `Faculties.xlsx`, `No Code.xlsx`,
+  `Low Code.xlsx` (Zoho Creator, 5th sem, batch 2024). 1,677 students, 22
+  staff, 51 classes (22 lecture groups + 29 practical classes), every class
+  one faculty member, every student exactly one Lecture + one Practical
+  class. Faculty ID joins cleanly; Registration Id = `2116` + the 9-digit
+  roll (all pass the app's `24 + 7 digits` rule). Trial Class 1 =
+  Bhuvaneswaran B's `CSE_2024_Group_1` (140 students). Details and the
+  combined workbook are in `FIREBASE-ROSTER-PLAN.md`'s build-status section.
+- **Data quirks to remember:** DOBs appended to some student names (17,
+  stripped before storing; never put DOBs on shared phones); faculty
+  "Sachin Adith 0" (stray 0, left as exported); AIDS rows use a different
+  Intake Name format; Bhuvaneswaran B (101077) vs Bhuvaneswari R (101327)
+  differ by one letter — always key on email/ID, never the name.
+- **App:** `#classes-card` / `selectClass()` / `fetchClassesFromFirestore()`
+  in `app.js`. Inert while `FIREBASE_CONFIG` is `null` (current state), so
+  staff still just see the Trial Class 1 flow. The old "Trial Class 1"
+  rejection text is now `activeClassLabel`. **Behavior change:** sign-out now
+  also wipes the cached classes and the loaded roster (student names on
+  shared phones); scanned roll numbers stay.
+- **Not yet verified:** anything touching real Firebase (SDK load,
+  `signInWithCredential` with P1's token, the Firestore rules). Tested
+  headless with real data for one staff account: 16 checks.
+- **Private data lives outside the repo:** `../p3-private-data/classes-import.json`.
+
 ## Firebase roster-sync plan (not built — see FIREBASE-ROSTER-PLAN.md)
 
 Full detail in `FIREBASE-ROSTER-PLAN.md` in this folder. Summary:

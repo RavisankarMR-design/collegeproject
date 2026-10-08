@@ -35,6 +35,15 @@
   <p class="subtitle lockable">Scan each student's ID card barcode. It keeps scanning — the list builds itself. Export to Excel when done. Works fully offline once loaded.</p>
   <p class="footer-note lockable" id="signed-in-as" style="display:none; text-align:left; margin:0 0 14px;"></p>
 
+  <div class="card lockable" id="classes-card" style="display:none;">
+    <p class="eyebrow">Your classes</p>
+    <div id="class-list"></div>
+    <div id="class-status" class="status"></div>
+    <p class="footer-note" style="margin:12px 0 0; text-align:left;">
+      <a href="#" id="resync-link">Timetable changed? Re-sync (needs internet)</a>
+    </p>
+  </div>
+
   <div class="card lockable">
     <p class="footer-note" style="margin:0; text-align:left;">
       <a href="#" id="roster-toggle">Have a class roster? Tap to add names + absent tracking</a>

@@ -29,6 +29,13 @@ const DUPLICATE_COOLDOWN_MS = 1500; // ignore the same code re-firing while stil
 const STORAGE_KEY = 'rollcall_state_v1';
 const ROSTER_KEY = 'rollcall_roster_v1';
 const TRIAL_ACTIVE_KEY = 'rollcall_trial_active_v1';
+const CLASSES_KEY = 'rollcall_classes_v1';
+// Staff -> classes come from Firestore (see FIREBASE-ROSTER-PLAN.md). Paste the
+// web-app config object from Firebase console -> Project settings -> Your apps.
+// While this is null nothing is fetched and the old Trial Class 1 flow is all
+// that shows, so deploying before the project exists changes nothing for staff.
+const FIREBASE_CONFIG = null;
+const FIREBASE_SDK_VERSION = '13.0.0';
 // Roll numbers are always "24" + 7 digits (e.g. 240701424) — only the first
 // two digits are fixed, the other 7 vary per year/department/student.
 // Applied to scans too, so a misread barcode can't land in the list.
@@ -48,6 +55,8 @@ const roster = new Map(); // rollNo -> name, loaded separately from the scan ses
 // custom pasted roster does NOT set this — it stays name-only/no-blocking,
 // same as before, since that's typed by the teacher and may be incomplete.
 let trialActive = false;
+let activeClassLabel = 'Trial Class 1'; // name shown in rejection messages; the class picked from the list, or the bundled trial class
+let myClasses = []; // this staff member's classes (cached from Firestore)
 
 // Everything lived only in a JS variable — a reload, an accidentally-closed
 // tab, or the OS killing a backgrounded tab (common on both Android and iOS
@@ -101,10 +110,14 @@ function loadRoster() {
   } catch { /* corrupt/unavailable — start with no roster rather than crash */ }
 }
 function saveTrialActive() {
-  try { localStorage.setItem(TRIAL_ACTIVE_KEY, trialActive ? '1' : ''); } catch { /* not critical */ }
+  try { localStorage.setItem(TRIAL_ACTIVE_KEY, trialActive ? activeClassLabel : ''); } catch { /* not critical */ }
 }
 function loadTrialActive() {
-  try { trialActive = localStorage.getItem(TRIAL_ACTIVE_KEY) === '1'; } catch { trialActive = false; }
+  try {
+    const v = localStorage.getItem(TRIAL_ACTIVE_KEY) || '';
+    trialActive = v !== '';
+    if (v && v !== '1') activeClassLabel = v;
+  } catch { trialActive = false; }
 }
 
 const els = {
@@ -317,7 +330,7 @@ async function editEntry(idx) {
     return;
   }
   if (trialActive && !roster.has(rollNo)) {
-    alert(`${rollNo} is not on the Trial Class 1 roster.`);
+    alert(`${rollNo} is not on the ${activeClassLabel} roster.`);
     return;
   }
 
@@ -357,7 +370,7 @@ function onDecoded(decodedText) {
 
   if (trialActive && !roster.has(rollNo)) {
     beep(220, 0.3, [80, 60, 80]);
-    setStatus(`${rollNo} is not on the Trial Class 1 roster — rejected.`, 'err');
+    setStatus(`${rollNo} is not on the ${activeClassLabel} roster — rejected.`, 'err');
     return;
   }
 
@@ -605,6 +618,7 @@ function loadTrialClass1Roster() {
   roster.clear();
   for (const [rollNo, name] of Object.entries(data)) roster.set(rollNo, name);
   trialActive = true;
+  activeClassLabel = 'Trial Class 1';
   saveRoster();
   saveTrialActive();
   els.rosterClearBtn.style.display = 'block';
@@ -752,6 +766,115 @@ loadState();
 renderList();
 if (rows.length > 0) setStatus(`Restored ${rows.length} scan${rows.length === 1 ? '' : 's'} from before — keep going or export.`, 'info');
 
+// --- Staff classes (Firestore -> cached on the phone) -------------------------
+// Each staff member sees only their own classes. Tapping one loads that class's
+// roster (only those roll numbers can be scanned) and starts the camera. The
+// list is fetched once at sign-in and cached; every session after is offline.
+// The cache holds real student names, and these phones get passed around, so it
+// is wiped on sign-out and discarded if a different account signs in.
+const classEls = {
+  card: document.getElementById('classes-card'),
+  list: document.getElementById('class-list'),
+  status: document.getElementById('class-status'),
+};
+
+function cachedClassesFor(email) {
+  try {
+    const c = JSON.parse(localStorage.getItem(CLASSES_KEY));
+    return c && c.email === email && Array.isArray(c.classes) ? c.classes : [];
+  } catch { return []; }
+}
+function saveClasses(email, classes) {
+  try { localStorage.setItem(CLASSES_KEY, JSON.stringify({ email, classes, syncedAt: new Date().toISOString() })); } catch { /* not critical */ }
+}
+// Student names + the active roster all go; the scanned roll numbers stay (export first).
+function wipeClassData() {
+  try { localStorage.removeItem(CLASSES_KEY); } catch { /* not critical */ }
+  myClasses = [];
+  roster.clear();
+  trialActive = false;
+  activeClassLabel = 'Trial Class 1';
+  saveRoster();
+  saveTrialActive();
+}
+
+const prettyClass = (name) => name.replace(/_/g, ' ');
+
+function renderClassList() {
+  classEls.card.style.display = myClasses.length ? 'block' : 'none';
+  classEls.list.innerHTML = myClasses.map((c, i) => `
+    <button class="secondary class-btn${trialActive && activeClassLabel === c.name ? ' active' : ''}" data-i="${i}">
+      <span>${escapeHtml(prettyClass(c.name))}</span>
+      <small>${escapeHtml(c.component)} · ${c.students.length} students</small>
+    </button>`).join('');
+}
+
+function setClassStatus(text, kind) {
+  classEls.status.textContent = text;
+  classEls.status.className = `status show ${kind}`;
+}
+
+async function selectClass(cls) {
+  const switching = trialActive && activeClassLabel !== cls.name;
+  if (switching && rows.length > 0) {
+    if (!(await askConfirm(`Switch to ${prettyClass(cls.name)}? ${rows.length === 1 ? 'The 1 scan so far belongs' : `The ${rows.length} scans so far belong`} to ${prettyClass(activeClassLabel)} and will be cleared — export first if you need them.`))) return;
+    rows.length = 0;
+    seenRollNos.clear();
+    dupeCount = 0;
+    dupeLog.length = 0;
+    lastDecoded = { text: null, at: 0 };
+    saveState();
+  }
+  roster.clear();
+  for (const st of cls.students) roster.set(st.roll, st.name);
+  trialActive = true;
+  activeClassLabel = cls.name;
+  saveRoster();
+  saveTrialActive();
+  els.rosterClearBtn.style.display = 'block';
+  setRosterStatus(`${prettyClass(cls.name)} — ${roster.size} students. Only these roll numbers can be scanned.`, 'ok');
+  renderList();
+  renderClassList();
+  setClassStatus(`${prettyClass(cls.name)} selected.`, 'ok');
+  if (!scanning) startScanning();
+}
+classEls.list.addEventListener('click', (e) => {
+  const btn = e.target.closest('button.class-btn');
+  if (btn) selectClass(myClasses[Number(btn.dataset.i)]);
+});
+
+// Needs internet and the Google ID token from this sign-in. The Firebase SDK is
+// loaded from Google only here, so every normal session stays fully offline.
+// Firestore rules (firebase/firestore.rules) only return classes whose
+// staffEmails contains the signed-in email, so a student account gets nothing.
+async function fetchClassesFromFirestore(idToken, email) {
+  const base = `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}`;
+  const [{ initializeApp }, { getAuth, GoogleAuthProvider, signInWithCredential }, { getFirestore, collection, query, where, getDocs }] =
+    await Promise.all([import(`${base}/firebase-app.js`), import(`${base}/firebase-auth.js`), import(`${base}/firebase-firestore.js`)]);
+  const app = initializeApp(FIREBASE_CONFIG);
+  await signInWithCredential(getAuth(app), GoogleAuthProvider.credential(idToken));
+  const snap = await getDocs(query(collection(getFirestore(app), 'classes'), where('staffEmails', 'array-contains', email)));
+  return snap.docs
+    .map((d) => d.data())
+    .sort((a, b) => (a.component === b.component ? a.name.localeCompare(b.name, undefined, { numeric: true }) : a.component === 'Lecture' ? -1 : 1));
+}
+
+async function syncClasses(idToken, email) {
+  if (!FIREBASE_CONFIG) return;
+  setClassStatus('Loading your classes…', 'info');
+  classEls.card.style.display = 'block';
+  try {
+    const classes = await fetchClassesFromFirestore(idToken, email);
+    saveClasses(email, classes);
+    myClasses = classes;
+    renderClassList();
+    setClassStatus(classes.length ? '' : 'No classes are assigned to this account.', classes.length ? 'info' : 'err');
+    if (!classes.length) classEls.card.style.display = 'block';
+  } catch {
+    setClassStatus('Could not load your classes — check your internet connection, then sign out and back in.', 'err');
+  }
+}
+
 // --- Staff sign-in gate ---------------------------------------------------
 
 const loginEls = {
@@ -788,12 +911,20 @@ function showApp(user) {
   document.body.classList.remove('login-pending');
   loginEls.signedInAs.style.display = 'block';
   loginEls.signedInAs.innerHTML = `Signed in as ${escapeHtml(user.email)} · <a href="#" id="sign-out-link">Sign out</a>`;
-  document.getElementById('sign-out-link').addEventListener('click', (e) => {
-    e.preventDefault();
-    try { localStorage.removeItem(LOGIN_KEY); } catch { /* not critical */ }
-    location.reload();
-  });
+  document.getElementById('sign-out-link').addEventListener('click', (e) => { e.preventDefault(); signOut(); });
+  myClasses = cachedClassesFor(user.email);
+  renderClassList();
 }
+
+function signOut() {
+  try { localStorage.removeItem(LOGIN_KEY); } catch { /* not critical */ }
+  wipeClassData();
+  location.reload();
+}
+document.getElementById('resync-link').addEventListener('click', async (e) => {
+  e.preventDefault();
+  if (await askConfirm('Re-sync signs you out and back in to download your classes again. It needs internet. Continue?')) signOut();
+});
 
 function showLoginScreen() {
   loginEls.screen.style.display = 'flex';
@@ -807,8 +938,12 @@ function handleCredentialResponse(response) {
   const domainOk = claims.hd === ALLOWED_EMAIL_DOMAIN || email.endsWith('@' + ALLOWED_EMAIL_DOMAIN);
   if (!domainOk) { loginError(`${claims.email || 'That account'} isn't a @${ALLOWED_EMAIL_DOMAIN} account.`); return; }
   const user = { email, name: claims.name || email, loginAt: new Date().toISOString() };
+  let cachedFor = null;
+  try { cachedFor = (JSON.parse(localStorage.getItem(CLASSES_KEY)) || {}).email; } catch { /* none */ }
+  if (cachedFor && cachedFor !== email) wipeClassData();
   try { localStorage.setItem(LOGIN_KEY, JSON.stringify(user)); } catch { /* still proceed for this session */ }
   showApp(user);
+  syncClasses(response.credential, email);
 }
 window.handleCredentialResponse = handleCredentialResponse; // GIS calls this by name from its own script
 
