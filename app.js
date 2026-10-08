@@ -549,7 +549,16 @@ function guessEmail(name, rollNo) {
   } else {
     let trail = 0;
     while (trail < words.length - lead && isInitial(words[words.length - 1 - trail])) trail++;
-    first = words.slice(lead, words.length - trail).join('');
+    // middle: a run of 2+ initials is its own dotted segment ("Immanuel S A Spurgeon" ->
+    // immanuel.sa.spurgeon); a single short middle letter merges into the name (verified in directory)
+    const mid = words.slice(lead, words.length - trail);
+    const segs = [''];
+    for (let i = 0; i < mid.length;) {
+      let j = i; while (j < mid.length && isInitial(mid[j])) j++;
+      if (j - i >= 2) { segs.push(mid.slice(i, j).join(''), ''); i = j; }
+      else { segs[segs.length - 1] += mid[i]; i++; }
+    }
+    first = segs.filter(Boolean).join('.');
     initials = [...words.slice(0, lead), ...words.slice(words.length - trail)].join('');
   }
   first = first.toLowerCase();
