@@ -521,14 +521,18 @@ function fullRollNo(rollNo) {
 // Guessed from a real example (ravisankar.mr.2024.cse@rajalakshmi.edu.in for
 // "Ravi Sankar M R", roll 240701424): firstname+middlename run together,
 // trailing 1-2 letter initial words joined separately, then .year.dept.
-// DEPT_CODE is hardcoded 'cse' — only correct for a CSE roster. A pasted
-// roster for another department needs this changed, or the emails will be
-// wrong. Also wrong for any name that doesn't end in short initials (e.g. a
-// real surname like "Subedi") — this is a best-effort guess, not verified
-// data, until a real roll->email roster replaces it.
-const DEPT_CODE = 'cse';
+// Department part: the owner's short codes, picked from digits 3-4 of the roll
+// number (2407.. = CSE, 2415.. = AI&ML, ...; that mapping is exact in the real
+// DigiCampus data). Only CSE's "cse" is verified against a real email; the
+// others are the owner's stated abbreviations, unconfirmed. A roll with an
+// unknown department code gets a blank email rather than a wrong one. Also
+// wrong for any name that doesn't end in short initials (e.g. a name that
+// starts with them, or a real surname like "Subedi") — a best-effort guess,
+// not verified data, until a real roll->email list replaces it.
+const DEPT_CODES = { '03': 'bme', '07': 'cse', '11': 'mech', '12': 'mct', '14': 'csbs', '15': 'aiml', '18': 'aids' };
 function guessEmail(name, rollNo) {
-  if (!name) return '';
+  const dept = DEPT_CODES[String(rollNo).slice(2, 4)];
+  if (!name || !dept) return '';
   const words = name.trim().split(/\s+/);
   let splitAt = words.length;
   while (splitAt > 0 && /^[A-Za-z]{1,2}$/.test(words[splitAt - 1])) splitAt--;
@@ -536,7 +540,7 @@ function guessEmail(name, rollNo) {
   const first = words.slice(0, splitAt).join('').toLowerCase();
   const initials = words.slice(splitAt).join('').toLowerCase();
   const year = '20' + rollNo.slice(0, 2);
-  const local = initials ? `${first}.${initials}.${year}.${DEPT_CODE}` : `${first}.${year}.${DEPT_CODE}`;
+  const local = initials ? `${first}.${initials}.${year}.${dept}` : `${first}.${year}.${dept}`;
   return `${local}@rajalakshmi.edu.in`;
 }
 

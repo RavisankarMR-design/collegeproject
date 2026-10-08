@@ -132,6 +132,14 @@ match that one real example exactly. **Known to misfire**:
   surname like "Subedi" instead of Tamil-style initials) gets no `.initials`
   segment and is more likely wrong.
 
+**Update (2026-10-08, later): department codes added.** `guessEmail()` now picks
+the code from digits 3-4 of the roll number using the owner's abbreviations:
+03 `bme`, 07 `cse`, 11 `mech`, 12 `mct`, 14 `csbs`, 15 `aiml`, 18 `aids`; an
+unknown code gives a blank email. Only `cse` is verified against a real email
+(the owner's); the rest are unconfirmed abbreviations. Checked: all 1,677 real
+students get their own department's code. Names that start with initials
+(10%) still get the wrong shape.
+
 **Decision (2026-10-08): keep the guessed emails for now; the owner will supply
 the real student email list later.** The three DigiCampus sheets contain no
 student emails (only staff emails, in Faculties.xlsx). Measured on the 1,677
