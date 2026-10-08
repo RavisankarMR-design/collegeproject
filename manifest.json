@@ -1,6 +1,6 @@
 {
-  "name": "ID Barcode Roll Call",
-  "short_name": "Roll Call",
+  "name": "REC Attendance Scanner",
+  "short_name": "REC Scan",
   "description": "Scan student ID barcodes continuously and export the roll list to Excel.",
   "start_url": "./index.html",
   "scope": "./",

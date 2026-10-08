@@ -1,4 +1,4 @@
-# Project 3 — ID Barcode Roll Call — Project Notes
+# Project 3 — REC Attendance Scanner — Project Notes
 
 Standalone barcode-scan-to-Excel PWA. Independent of the attendance web app
 (Project 1) in this same repo — three separate deliverables per staff's
@@ -29,6 +29,28 @@ libraries.
 - `FIREBASE-ROSTER-PLAN.md` — agreed architecture for real per-staff roster
   sync, not built yet (see below)
 
+## Naming (2026-10-08)
+
+Renamed from "ID Barcode Roll Call" ("Roll Call" read as an informal school
+phrase and isn't what the college's own data calls it — the export and
+DigiCampus format say "Attendance"). Current names:
+
+- **Full name: "REC Attendance Scanner"** — `<title>`, splash, page
+  heading, `manifest.json` `name`. Says what it is, and avoids naming one
+  scan method (barcode) so it still fits if the signed-QR idea happens.
+- **Home-screen label: "REC Scan"** — `manifest.json` `short_name` and the
+  `apple-mobile-web-app-title` meta tag. Kept ≤12 characters because
+  launchers truncate longer icon labels (guidance from several PWA
+  sources); "REC Attendance" is 14 and would be cut.
+- **Deliberately NOT renamed:** the `rollcall_*` localStorage keys (renaming
+  would wipe every phone's saved scans, roster and PIN) and the
+  `RollCall_<timestamp>` default export filename (staff may already file
+  exports by that name — rename only if asked).
+- Already-installed copies may keep showing "Roll Call" under the icon
+  until reinstalled: Android and iOS cache the label at install time.
+- The "REC" name and logo are used without confirmed college approval for a
+  student-built tool — worth confirming with staff before wider rollout.
+
 ## Branding (2026-09-29/30 session)
 
 Reskinned to match Rajalakshmi Engineering College's own sites
@@ -51,8 +73,8 @@ gathering their design language:
   screen. `theme_color`/`background_color` in `manifest.json` updated to
   match (`#6a1b9a` / `#eeeef2`).
 - **Splash screen:** shows on every load (browser tab or installed PWA) —
-  `#splash` div in `index.html`, full college logo lockup + "ID Barcode
-  Roll Call", white background. Minimum 600ms display (`SPLASH_MIN_MS` in
+  `#splash` div in `index.html`, full college logo lockup + the app name
+  (see Naming below), white background. Minimum 600ms display (`SPLASH_MIN_MS` in
   `app.js`) so a fast/cached load doesn't just flash it, then fades via
   `.splash.hide` (opacity transition). All assets already in the SW
   precache list, so it works offline too.

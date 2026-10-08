@@ -1,4 +1,4 @@
-// ID Barcode Roll Call — continuous scan-list-export tool.
+// REC Attendance Scanner — continuous scan-list-export tool.
 // Standalone, offline-first: no server, no network calls. Everything (the
 // scanned list, the Excel file) is produced entirely in this browser tab.
 
