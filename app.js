@@ -876,8 +876,11 @@ const prettyClass = (name) => name.replace(/_/g, ' ');
 const expandedClasses = new Set();
 
 function renderClassList() {
-  classEls.card.style.display = myClasses.length ? 'block' : 'none';
-  classEls.list.innerHTML = myClasses.map((c, i) => {
+  // always shown once signed in: with no saved classes the Re-sync link must stay reachable
+  classEls.card.style.display = 'block';
+  if (!myClasses.length) classEls.list.innerHTML = '<p class="footer-note" style="margin:0;">No classes saved on this phone yet. Tap Re-sync below (needs internet).</p>';
+  else
+    classEls.list.innerHTML = myClasses.map((c, i) => {
     const open = expandedClasses.has(c.name);
     return `
     <button class="secondary class-btn${trialActive && activeClassLabel === c.name ? ' active' : ''}" data-i="${i}">
