@@ -145,7 +145,7 @@ guess for the rest (11 of 1,677 verified); this directory check is the quick way
 to verify more. This browser's Gmail is the owner's personal account, not the
 college one, so the check has to be run by the owner on the college account.
 
-**Update (2026-10-08, latest 2): 17 of 18 spot-check emails confirmed in the directory** (incl. 5 very long names). Middle initials: a run of 2+ short words in the middle becomes its own dotted segment (`Immanuel S A Spurgeon` -> `immanuel.sa.spurgeon.2024.cse@…`, directory-confirmed); a single short middle letter still merges into the name (`nehalsewin`, `giffinmsteve`). Implemented in `guessEmail`; cache `roll-call-v35`.
+**Update (2026-10-08, latest 2): All 18 spot-check emails confirmed (Roshan confirmed by owner) in the directory** (incl. 5 very long names). Middle initials: a run of 2+ short words in the middle becomes its own dotted segment (`Immanuel S A Spurgeon` -> `immanuel.sa.spurgeon.2024.cse@…`, directory-confirmed); a single short middle letter still merges into the name (`nehalsewin`, `giffinmsteve`). Implemented in `guessEmail`; cache `roll-call-v35`.
 
 **Update (2026-10-08, earlier): department codes added.** `guessEmail()` now picks
 the code from digits 3-4 of the roll number using the owner's abbreviations:
