@@ -946,26 +946,42 @@ async function fetchClassesFromFirestore(idToken, email) {
   const app = initializeApp(FIREBASE_CONFIG);
   await signInWithCredential(getAuth(app), GoogleAuthProvider.credential(idToken));
   const snap = await getDocs(query(collection(getFirestore(app), 'classes'), where('staffEmails', 'array-contains', email)));
+  // On a weak/offline connection Firestore can answer from its empty local cache; that is not "no classes".
+  if (snap.metadata.fromCache) throw new Error('weak network: answer came from cache, not the server');
   return snap.docs
     .map((d) => d.data())
     .sort((a, b) => (a.component === b.component ? a.name.localeCompare(b.name, undefined, { numeric: true }) : a.component === 'Lecture' ? -1 : 1));
 }
 
+let lastGoogleToken = null; // kept in memory only, so "Retry" can re-use this sign-in without signing out
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout: network too slow')), ms))]);
+
 async function syncClasses(idToken, email) {
   if (!FIREBASE_CONFIG) return;
+  lastGoogleToken = { idToken, email };
   setClassStatus('Loading your classes…', 'info');
   classEls.card.style.display = 'block';
-  try {
-    const classes = await fetchClassesFromFirestore(idToken, email);
-    saveClasses(email, classes);
-    myClasses = classes;
-    renderClassList();
-    setClassStatus(classes.length ? '' : 'No classes are assigned to this account.', classes.length ? 'info' : 'err');
-    if (!classes.length) classEls.card.style.display = 'block';
-  } catch (err) {
-    console.warn('class sync failed', err);
-    setClassStatus(`Could not load your classes (${err && (err.code || err.message) || 'unknown error'}). Needs internet at sign-in; you can still use the Trial Class 1 button below.`, 'err');
+  let lastErr;
+  // weak network: up to 3 tries, 30s each; saved classes are never replaced unless a try succeeds
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const classes = await withTimeout(fetchClassesFromFirestore(idToken, email), 30000);
+      // an empty answer must not wipe classes already saved on this phone
+      if (classes.length || !myClasses.length) { saveClasses(email, classes); myClasses = classes; }
+      renderClassList();
+      setClassStatus(classes.length ? '' : 'No classes are assigned to this account.', classes.length ? 'info' : 'err');
+      return;
+    } catch (err) {
+      lastErr = err;
+      console.warn('class sync failed (attempt ' + attempt + ')', err);
+      if (attempt < 3) { setClassStatus(`Slow network — retrying (${attempt}/3)…`, 'info'); await new Promise((r) => setTimeout(r, 2000)); }
+    }
   }
+  setClassStatus(`Could not load your classes (${lastErr && (lastErr.code || lastErr.message) || 'unknown error'}). ${myClasses.length ? 'Showing the classes saved on this phone. ' : ''}Move to better signal and tap Retry.`, 'err');
+  const retry = document.createElement('a');
+  retry.href = '#'; retry.textContent = ' Retry'; retry.style.marginLeft = '6px';
+  retry.addEventListener('click', (e) => { e.preventDefault(); syncClasses(lastGoogleToken.idToken, lastGoogleToken.email); });
+  classEls.status.appendChild(retry);
 }
 
 // --- Staff sign-in gate ---------------------------------------------------
