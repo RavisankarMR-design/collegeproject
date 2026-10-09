@@ -220,7 +220,7 @@ function unlockAudio() {
 document.addEventListener('pointerdown', unlockAudio);
 document.addEventListener('keydown', unlockAudio);
 
-function beep(freq = 880, secs = 0.15, vibration = 60) {
+function beep(freq = 2500, secs = 0.25, vibration = 60) {
   try {
     unlockAudio();
     const ctx = audioCtx;
@@ -230,7 +230,7 @@ function beep(freq = 880, secs = 0.15, vibration = 60) {
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.setValueAtTime(1, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + secs);
     osc.start();
     osc.stop(ctx.currentTime + secs);
@@ -389,7 +389,7 @@ function onDecoded(decodedText) {
   }
 
   if (trialActive && !roster.has(rollNo)) {
-    beep(220, 0.3, [80, 60, 80]);
+    beep(600, 0.5, [80, 60, 80]);
     setStatus(`${rollNo} is not on the ${activeClassLabel} roster — rejected.`, 'err');
     return;
   }
