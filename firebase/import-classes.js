@@ -17,8 +17,11 @@ const db = getFirestore();
 const classes = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
 
 (async () => {
-  const batch = db.batch(); // 51 classes, far under the 500-write batch limit
-  for (const c of classes) batch.set(db.collection('classes').doc(c.classId), c);
-  await batch.commit();
+  // Firestore allows 500 writes per batch; chunk so 500 staff / ~700 classes also works
+  for (let i = 0; i < classes.length; i += 400) {
+    const batch = db.batch();
+    for (const c of classes.slice(i, i + 400)) batch.set(db.collection('classes').doc(c.classId), c);
+    await batch.commit();
+  }
   console.log(`Imported ${classes.length} classes.`);
 })().catch((e) => { console.error(e); process.exit(1); });
