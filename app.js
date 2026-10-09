@@ -230,6 +230,8 @@ function unlockAudio() {
 document.addEventListener('pointerdown', unlockAudio);
 document.addEventListener('keydown', unlockAudio);
 
+const BEEP_VOLUME = 0.8; // 1 = full scale (clips are normalized to it); owner found full too loud
+
 // Plays the recorded clip (loudest option: pre-clipped, harmonic-rich); falls back to a
 // synthesized beep if the clip isn't decoded yet.
 function beep(freq = 2500, secs = 0.25, vibration = 60) {
@@ -240,7 +242,10 @@ function beep(freq = 2500, secs = 0.25, vibration = 60) {
     if (clip) {
       const src = ctx.createBufferSource();
       src.buffer = clip;
-      src.connect(ctx.destination);
+      const vol = ctx.createGain();
+      vol.gain.value = BEEP_VOLUME;
+      src.connect(vol);
+      vol.connect(ctx.destination);
       src.start();
     } else {
       const gain = ctx.createGain();
@@ -254,7 +259,7 @@ function beep(freq = 2500, secs = 0.25, vibration = 60) {
         osc.start(t0 + i * secs);
         osc.stop(t0 + i * secs + secs * 0.9);
       });
-      gain.gain.setValueAtTime(1, t0);
+      gain.gain.setValueAtTime(BEEP_VOLUME, t0);
     }
   } catch { /* audio not available — silent is fine, not critical */ }
   if (navigator.vibrate) navigator.vibrate(vibration);
