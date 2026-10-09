@@ -220,20 +220,26 @@ function unlockAudio() {
 document.addEventListener('pointerdown', unlockAudio);
 document.addEventListener('keydown', unlockAudio);
 
+// Full-scale square wave is the loudest a web page can synthesize, so extra loudness
+// comes from more sound energy: two pulses (freq, then ~1.3x freq) with a hard attack.
 function beep(freq = 2500, secs = 0.25, vibration = 60) {
   try {
     unlockAudio();
     const ctx = audioCtx;
-    const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'square'; // harsher than a sine, carries in a noisy class
-    osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(1, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + secs);
-    osc.start();
-    osc.stop(ctx.currentTime + secs);
+    const t0 = ctx.currentTime;
+    [freq, freq * 1.3].forEach((f, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.value = f;
+      osc.connect(gain);
+      const start = t0 + i * secs;
+      osc.start(start);
+      osc.stop(start + secs * 0.9);
+    });
+    gain.gain.setValueAtTime(1, t0);
+    gain.gain.setValueAtTime(0.001, t0 + secs * 2);
   } catch { /* audio not available — silent is fine, not critical */ }
   if (navigator.vibrate) navigator.vibrate(vibration);
 }
