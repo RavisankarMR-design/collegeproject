@@ -626,7 +626,8 @@ function exportToExcel() {
   XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const defaultName = `RollCall_${stamp}`;
+  // class name in the file name when a class is selected (e.g. CSE_2024_Group_1_2026-10-09T10-30-00), so exports are easy to tell apart
+  const defaultName = `${trialActive ? activeClassLabel.replace(/[^A-Za-z0-9_-]+/g, '_') : 'RollCall'}_${stamp}`;
   // Optional rename before download — e.g. "Physics_240923" instead of a
   // bare timestamp. Sanitised so a stray / or \ in what they typed can't
   // turn into a nested path in the downloaded filename.
