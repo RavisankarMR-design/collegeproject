@@ -1,7 +1,7 @@
 // Offline-first service worker — every asset is vendored locally (see
 // vendor/), nothing comes from a CDN, so once cached the tool works with
 // zero internet.
-const CACHE_NAME = 'roll-call-v38';
+const CACHE_NAME = 'roll-call-v39';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -15,6 +15,8 @@ const PRECACHE_URLS = [
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
   './icons/college-logo-full.png',
+  './sounds/scan.wav',
+  './sounds/reject.wav',
 ];
 
 self.addEventListener('install', (event) => {

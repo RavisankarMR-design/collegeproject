@@ -211,35 +211,51 @@ function clearStatus() {
 // One shared AudioContext, unlocked by the first tap: browsers keep a context created
 // outside a user gesture (e.g. inside the camera's scan callback) suspended = silent.
 let audioCtx = null;
+const clips = {}; // name -> decoded AudioBuffer (recorded loud clips in sounds/, cached offline by sw.js)
+async function loadClip(name) {
+  try {
+    const buf = await (await fetch(`sounds/${name}.wav`)).arrayBuffer();
+    clips[name] = await audioCtx.decodeAudioData(buf);
+  } catch { /* synth beep below is the fallback */ }
+}
 function unlockAudio() {
   try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      loadClip('scan'); loadClip('reject');
+    }
     if (audioCtx.state === 'suspended') audioCtx.resume();
   } catch { /* audio not available */ }
 }
 document.addEventListener('pointerdown', unlockAudio);
 document.addEventListener('keydown', unlockAudio);
 
-// Full-scale square wave is the loudest a web page can synthesize, so extra loudness
-// comes from more sound energy: two pulses (freq, then ~1.3x freq) with a hard attack.
+// Plays the recorded clip (loudest option: pre-clipped, harmonic-rich); falls back to a
+// synthesized beep if the clip isn't decoded yet.
 function beep(freq = 2500, secs = 0.25, vibration = 60) {
   try {
     unlockAudio();
     const ctx = audioCtx;
-    const gain = ctx.createGain();
-    gain.connect(ctx.destination);
-    const t0 = ctx.currentTime;
-    [freq, freq * 1.3].forEach((f, i) => {
-      const osc = ctx.createOscillator();
-      osc.type = 'square';
-      osc.frequency.value = f;
-      osc.connect(gain);
-      const start = t0 + i * secs;
-      osc.start(start);
-      osc.stop(start + secs * 0.9);
-    });
-    gain.gain.setValueAtTime(1, t0);
-    gain.gain.setValueAtTime(0.001, t0 + secs * 2);
+    const clip = clips[freq < 1000 ? 'reject' : 'scan'];
+    if (clip) {
+      const src = ctx.createBufferSource();
+      src.buffer = clip;
+      src.connect(ctx.destination);
+      src.start();
+    } else {
+      const gain = ctx.createGain();
+      gain.connect(ctx.destination);
+      const t0 = ctx.currentTime;
+      [freq, freq * 1.3].forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.value = f;
+        osc.connect(gain);
+        osc.start(t0 + i * secs);
+        osc.stop(t0 + i * secs + secs * 0.9);
+      });
+      gain.gain.setValueAtTime(1, t0);
+    }
   } catch { /* audio not available — silent is fine, not critical */ }
   if (navigator.vibrate) navigator.vibrate(vibration);
 }
