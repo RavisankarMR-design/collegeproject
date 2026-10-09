@@ -208,18 +208,32 @@ function clearStatus() {
 // Defaults are the short high "added" beep; a rejection uses a long low
 // tone + double buzz so a student scanning on a passed phone notices it
 // without reading the status text.
-function beep(freq = 880, secs = 0.08, vibration = 60) {
+// One shared AudioContext, unlocked by the first tap: browsers keep a context created
+// outside a user gesture (e.g. inside the camera's scan callback) suspended = silent.
+let audioCtx = null;
+function unlockAudio() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch { /* audio not available */ }
+}
+document.addEventListener('pointerdown', unlockAudio);
+document.addEventListener('keydown', unlockAudio);
+
+function beep(freq = 880, secs = 0.15, vibration = 60) {
+  try {
+    unlockAudio();
+    const ctx = audioCtx;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+    osc.type = 'square'; // harsher than a sine, carries in a noisy class
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + secs);
     osc.start();
     osc.stop(ctx.currentTime + secs);
-    osc.onended = () => ctx.close();
   } catch { /* audio not available — silent is fine, not critical */ }
   if (navigator.vibrate) navigator.vibrate(vibration);
 }
