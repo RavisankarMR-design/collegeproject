@@ -492,6 +492,64 @@ async function toggleTorch() {
   } catch { /* device refused mid-session — leave state as it was */ }
 }
 
+// Camera zoom: pinch on the camera view, or the slider under it. Only offered where the running
+// camera track reports a zoom range (Android Chrome does; iPhone Safari does not, so there the
+// slider simply never appears). The slider is outside the staff lock, so students can zoom too.
+const zoomEls = { row: document.getElementById('zoom-row'), range: document.getElementById('zoom-range'), reader: document.getElementById(READER_ID) };
+const ZOOM_KEY = 'rollcall_zoom_v1';
+let zoomFeature = null, zoomApplying = false, zoomPending = null;
+
+function pushZoom(v) {                         // one applyConstraints at a time; keep only the newest value
+  if (zoomApplying) { zoomPending = v; return; }
+  zoomApplying = true;
+  zoomFeature.apply(v).catch(() => { /* device refused this value */ }).finally(() => {
+    zoomApplying = false;
+    if (zoomPending !== null) { const p = zoomPending; zoomPending = null; pushZoom(p); }
+  });
+}
+function setZoom(v) {
+  if (!zoomFeature) return;
+  v = Math.min(Number(zoomEls.range.max), Math.max(Number(zoomEls.range.min), v));
+  zoomEls.range.value = v;
+  pushZoom(v);
+  try { localStorage.setItem(ZOOM_KEY, String(v)); } catch { /* not critical */ }
+}
+function setupZoom() {
+  zoomFeature = null; zoomPending = null;
+  zoomEls.row.style.display = 'none';
+  try {
+    const caps = scanner.getRunningTrackCameraCapabilities();
+    const zf = caps && caps.zoomFeature && caps.zoomFeature();
+    if (!zf || !zf.isSupported()) return;
+    const lo = zf.min(), hi = zf.max();
+    if (!(hi > lo)) return;
+    zoomEls.range.min = lo; zoomEls.range.max = hi; zoomEls.range.step = zf.step() || (hi - lo) / 50;
+    zoomFeature = zf;
+    zoomEls.row.style.display = 'flex';
+    let start = NaN;
+    try { start = Number(localStorage.getItem(ZOOM_KEY)); } catch { /* none saved */ }
+    if (!(start >= lo && start <= hi)) start = zf.value() != null ? zf.value() : lo;
+    setZoom(start);
+  } catch { zoomFeature = null; }
+}
+function hideZoom() { zoomFeature = null; zoomEls.row.style.display = 'none'; }
+
+zoomEls.range.addEventListener('input', () => setZoom(Number(zoomEls.range.value)));
+const pinchPointers = new Map();
+let pinch = null;
+const pinchDistance = () => { const [a, b] = [...pinchPointers.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+zoomEls.reader.addEventListener('pointerdown', (e) => {
+  pinchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinchPointers.size === 2 && zoomFeature) pinch = { d0: pinchDistance(), z0: Number(zoomEls.range.value) };
+});
+zoomEls.reader.addEventListener('pointermove', (e) => {
+  if (!pinchPointers.has(e.pointerId)) return;
+  pinchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinch && pinchPointers.size === 2 && pinch.d0 > 0) setZoom(pinch.z0 * pinchDistance() / pinch.d0);
+});
+const endPinch = (e) => { pinchPointers.delete(e.pointerId); if (pinchPointers.size < 2) pinch = null; };
+['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => zoomEls.reader.addEventListener(t, endPinch));
+
 async function startScanning() {
   clearStatus();
   els.startBtn.disabled = true;
@@ -528,6 +586,7 @@ async function startScanning() {
     setStatus('Scanning — hold each ID card steady in the box.', 'info');
     acquireWakeLock();
     updateTorchButton();
+    setupZoom();
   } catch (err) {
     els.startBtn.disabled = false;
     setStatus('Could not access camera: ' + (err && err.message ? err.message : err), 'err');
@@ -545,6 +604,7 @@ async function stopScanning() {
   els.startBtn.disabled = false;
   els.stopBtn.style.display = 'none';
   els.torchBtn.style.display = 'none';
+  hideZoom();
   releaseWakeLock();
   clearStatus();
 }

@@ -112,7 +112,11 @@ textarea.field { resize: vertical; }
   width: 100%;
   border-radius: 10px;
   overflow: hidden;
+  touch-action: pan-y; /* one finger still scrolls the page; two fingers are left to the pinch-zoom handler */
 }
+.zoom-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.zoom-row label { margin: 0; flex: none; }
+.zoom-row input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); height: 28px; }
 
 button {
   font-size: 0.95rem;

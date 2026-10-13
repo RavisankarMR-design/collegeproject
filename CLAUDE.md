@@ -463,6 +463,19 @@ class) as trial data.
   The student-style exclusion is a heuristic; none of the 22 real staff emails match
   it (checked). The 22 staff with their own classes are unaffected.
 
+## Camera zoom (2026-10-14)
+
+Pinch on the camera view, or use the slider under it, to zoom the scanner in and out
+(owner's request, so far-away cards can be read). `setupZoom()` reads the running
+camera track's zoom range through html5-qrcode's `zoomFeature()`; the slider only
+appears where the phone reports one. **Android Chrome supports it; iPhone Safari and
+Chrome-on-iPhone do not expose camera zoom, so there the slider never shows and pinch
+does nothing.** The slider sits outside the staff lock, so students can zoom while the
+phone is locked. The last level is remembered (`rollcall_zoom_v1`). Only one
+`applyConstraints` is in flight at a time, newest value wins. Tested with a simulated
+camera track (pinch out/in, clamping, slider, hide on stop); **not yet tried on a real
+phone camera**.
+
 ## Known limitation: proxy scans via screen images (discussed 2026-10-06, not fixed)
 
 Staff want to keep passing the phone to students to scan their own cards.
