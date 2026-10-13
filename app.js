@@ -42,6 +42,12 @@ const FIREBASE_CONFIG = {
   appId: '1:399324732813:web:fe3e9aa487b3d313c6b1c4',
 };
 const FIREBASE_SDK_VERSION = '13.0.0';
+// TEMPORARY trial class for the staff demo: a staff account with no classes of its own gets
+// this one class so there is something to scan. Needs the matching "allow get" block in
+// firebase/firestore.rules. It stops being offered, and is dropped from phones, on TRIAL_UNTIL.
+const TRIAL_CLASS_ID = 'CB23F35__CSE_2024_Group_1';
+const TRIAL_UNTIL = '2026-10-16';
+const pastDate = (isoDay) => new Date() >= new Date(isoDay + 'T00:00:00');
 // Roll numbers are always "24" + 7 digits (e.g. 240701424) — only the first
 // two digits are fixed, the other 7 vary per year/department/student.
 // Applied to scans too, so a misread barcode can't land in the list.
@@ -858,6 +864,18 @@ function cachedClassesFor(email) {
     return c && c.email === email && Array.isArray(c.classes) ? c.classes : [];
   } catch { return []; }
 }
+// A trial class carries its own end date; once that passes it is removed from the phone, and
+// the roster is cleared too if that class was the one in use.
+function dropExpiredTrial(email) {
+  const all = cachedClassesFor(email);
+  const expired = all.filter((c) => c.trialUntil && pastDate(c.trialUntil));
+  if (!expired.length) return;
+  saveClasses(email, all.filter((c) => !expired.includes(c)));
+  if (trialActive && expired.some((c) => c.name === activeClassLabel)) {
+    roster.clear(); trialActive = false;
+    saveRoster(); saveTrialActive(); renderList();
+  }
+}
 function saveClasses(email, classes) {
   try { localStorage.setItem(CLASSES_KEY, JSON.stringify({ email, classes, syncedAt: new Date().toISOString() })); } catch { /* not critical */ }
 }
@@ -942,16 +960,34 @@ classEls.list.addEventListener('click', (e) => {
 // staffEmails contains the signed-in email, so a student account gets nothing.
 async function fetchClassesFromFirestore(idToken, email) {
   const base = `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}`;
-  const [{ initializeApp }, { getAuth, GoogleAuthProvider, signInWithCredential }, { getFirestore, collection, query, where, getDocs }] =
+  const [{ initializeApp }, { getAuth, GoogleAuthProvider, signInWithCredential }, { getFirestore, collection, query, where, getDocs, doc, getDocFromServer }] =
     await Promise.all([import(`${base}/firebase-app.js`), import(`${base}/firebase-auth.js`), import(`${base}/firebase-firestore.js`)]);
   const app = initializeApp(FIREBASE_CONFIG);
   await signInWithCredential(getAuth(app), GoogleAuthProvider.credential(idToken));
-  const snap = await getDocs(query(collection(getFirestore(app), 'classes'), where('staffEmails', 'array-contains', email)));
+  const db = getFirestore(app);
+  const snap = await getDocs(query(collection(db, 'classes'), where('staffEmails', 'array-contains', email)));
   // On a weak/offline connection Firestore can answer from its empty local cache; that is not "no classes".
   if (snap.metadata.fromCache) throw new Error('weak network: answer came from cache, not the server');
-  return snap.docs
+  const own = snap.docs
     .map((d) => d.data())
     .sort((a, b) => (a.component === b.component ? a.name.localeCompare(b.name, undefined, { numeric: true }) : a.component === 'Lecture' ? -1 : 1));
+  return withTrialClass(own, () => getDocFromServer(doc(db, 'classes', TRIAL_CLASS_ID)).then((d) => (d.exists() ? d.data() : null)));
+}
+
+// Only for an account with nothing of its own. A refusal (a student account, or the rule has
+// expired) just leaves the list empty; a network error is passed on so the retry logic runs.
+async function withTrialClass(own, fetchTrial) {
+  if (own.length || pastDate(TRIAL_UNTIL)) return own;
+  try {
+    const cls = await fetchTrial();
+    if (!cls) return own;
+    const out = [Object.assign({}, cls, { trialUntil: TRIAL_UNTIL })];
+    out.trial = true;
+    return out;
+  } catch (err) {
+    if (err && err.code === 'permission-denied') return own;
+    throw err;
+  }
 }
 
 let lastGoogleToken = null; // kept in memory only, so "Retry" can re-use this sign-in without signing out
@@ -970,7 +1006,10 @@ async function syncClasses(idToken, email) {
       // an empty answer must not wipe classes already saved on this phone
       if (classes.length || !myClasses.length) { saveClasses(email, classes); myClasses = classes; }
       renderClassList();
-      setClassStatus(classes.length ? '' : 'No classes are assigned to this account.', classes.length ? 'info' : 'err');
+      setClassStatus(
+        classes.trial ? 'No classes are assigned to this account yet, so a trial class is shown.'
+          : classes.length ? '' : 'No classes are assigned to this account.',
+        classes.length ? 'info' : 'err');
       return;
     } catch (err) {
       lastErr = err;
@@ -1046,6 +1085,7 @@ function showApp(user) {
     e.preventDefault();
     if (await askConfirm('Sign out? Your classes stay saved on this phone, but you need internet to sign in again.')) signOut();
   });
+  dropExpiredTrial(user.email);
   myClasses = cachedClassesFor(user.email);
   renderClassList();
   // Ask the browser not to evict the saved classes when the phone runs low on

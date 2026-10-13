@@ -13,6 +13,19 @@ service cloud.firestore {
                   && request.auth.token.email_verified == true
                   && request.auth.token.email.lower() in resource.data.staffEmails;
       allow write: if false; // loaded only by firebase/import-classes.js (Admin SDK bypasses rules)
+
+      // TEMPORARY trial access for the staff demo, while real class data for those
+      // staff is not loaded yet. Any verified college account that does NOT look like a
+      // student account (student emails contain a ".20YY." batch segment, e.g.
+      // name.initials.2024.cse@) may open this ONE class by its id (get only, so no
+      // listing), and only until the date below. To switch it off early, delete this
+      // block and publish the rules. Keep the date in sync with TRIAL_UNTIL in app.js.
+      allow get: if classId == 'CB23F35__CSE_2024_Group_1'
+                 && request.auth != null
+                 && request.auth.token.email_verified == true
+                 && request.auth.token.email.lower().matches('.*@rajalakshmi[.]edu[.]in')
+                 && !request.auth.token.email.lower().matches('.*[.]20[0-9][0-9][.].*')
+                 && request.time < timestamp.date(2026, 10, 16);
     }
 
     match /{document=**} {

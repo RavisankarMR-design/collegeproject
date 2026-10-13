@@ -433,6 +433,30 @@ digits, derived email text and constants (no formula injection); the Firebase
 file-reading CVEs but P3 only writes files; the client-side sign-in gate is
 unverified by design — the server rules are the real boundary.
 
+## Trial class for the staff demo (2026-10-14, temporary)
+
+~50 staff were to try the app at a demo but only 22 staff have class data. Decision
+(owner): a staff account with **no classes of its own** gets the real class
+`CB23F35__CSE_2024_Group_1` (CSE 2024 Group 1, 140 students — Bhuvaneswaran's
+class) as trial data.
+
+- **App** (`app.js`): `withTrialClass()` is called only when the account's own query
+  returns nothing; it reads that one doc by id (`getDocFromServer`). A refusal
+  (`permission-denied`) leaves the list empty; a network error is passed on to the
+  existing retry logic. The status line says a trial class is shown.
+- **Rule** (`firebase/firestore.rules`, second `allow get` in `/classes/{classId}`):
+  by id only (no listing), verified `@rajalakshmi.edu.in` accounts, **excluding
+  student-style emails** (a `.20YY.` batch segment, e.g. `name.mr.2024.cse@`), and
+  only before 2026-10-16 (UTC). **Not live until the owner publishes the rules in the
+  Firebase console** (the repo file alone changes nothing).
+- **Expiry on phones:** the cached copy carries `trialUntil`; `dropExpiredTrial()`
+  removes it when the app is opened after that date and clears the roster if it was
+  the active class. `TRIAL_UNTIL` in `app.js` and the date in the rule must match.
+- **To switch off early:** delete the `allow get` block and publish the rules.
+- **Privacy note:** real student names + roll numbers reach every such staff phone.
+  The student-style exclusion is a heuristic; none of the 22 real staff emails match
+  it (checked). The 22 staff with their own classes are unaffected.
+
 ## Known limitation: proxy scans via screen images (discussed 2026-10-06, not fixed)
 
 Staff want to keep passing the phone to students to scan their own cards.
