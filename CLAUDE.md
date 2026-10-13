@@ -302,9 +302,12 @@ would have published 1,677 students' names/roll numbers and 22 staff emails.
   by the phone lock and the staff PIN, not by signing out.
 - **Firebase (done, see FIREBASE-ROSTER-PLAN.md):** project `rec-scan`
   (Spark, Mumbai), 51 classes imported, rules published and tested live (12
-  checks), one-time admin key revoked. **Not yet verified:** a *real* Google
-  ID token being accepted by Firebase (only a fake one was rejected with
-  `auth/invalid-credential`), and the picker on a real phone.
+  checks), one-time admin key revoked. **Confirmed by the owner on a real
+  phone (2026-10-13):** signing in works, so a real Google ID token *is*
+  accepted by Firebase, and their account's class (CSE 2024 Group 1) shows in
+  the picker. **Still not tested on a real phone:** switching between classes,
+  reopening fully offline after sign-in, and the cache surviving sign-out and
+  a phone restart.
 - **View students (2026-10-08):** each class in the picker has a "View
   students" link that expands its names (roll — name, scrollable) without
   selecting the class; selecting keeps it open; "Hide students" collapses it.

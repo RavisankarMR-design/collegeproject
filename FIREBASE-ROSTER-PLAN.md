@@ -245,18 +245,18 @@ regenerating that file from the workbook would drop it, so re-add it. To give
 someone else access to a class, add their lowercase email to that class's
 `staffEmails` the same way.
 
+### Verified on a real phone (2026-10-13)
+
+- **A real Google ID token is accepted by Firebase.** The owner signed in on
+  their phone and their class (CSE 2024 Group 1) appears in the picker, so
+  the client-ID allowlist is honored and no fallback to Firebase's own
+  Google sign-in is needed.
+
 ### Still NOT verified
 
-- **A real Google ID token being accepted by Firebase.** Everything up to
-  that step is proven: the Firebase SDK loads in the browser, initializes
-  against `rec-scan`, and Firebase itself rejects a fake token
-  (`auth/invalid-credential`). With a real staff sign-in the class list
-  should appear; if instead it shows an `auth/...` error mentioning the
-  audience, the client-ID allowlist isn't being honored and the fallback is
-  to switch the gate to Firebase's own Google sign-in.
-- Not tested on a real phone: the class picker, class switching, offline use
-  after first sign-in, and that saved data survives sign-out and phone
-  restarts.
+- Not tested on a real phone: class switching, offline use after first
+  sign-in, and that saved data survives sign-out and phone restarts.
+- Another staff member's account (only the owner's has been tried).
 
 ### Warning: P1's Google Cloud project now has Firebase attached
 
