@@ -408,7 +408,8 @@ boundary and a concrete result.
   account re-signing in (re-sync) keeps them; a list with no recorded owner is
   adopted by whoever is signed in.
 
-**Open — needs the owner's decision (touches Project 1):**
+**Open — owner decided on 2026-10-13 to keep it as is for now (does not
+affect P3; revisit if the repo's visibility or P1's roster use changes):**
 - **`data/class1-roster.json` is a live file on `main` of the public repo**
   (140 students, names + roll numbers; raw URL returns 200 without login).
   Removing P3's bundled copy did not make this private. P1's name-matching
