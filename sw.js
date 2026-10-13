@@ -1,14 +1,13 @@
 // Offline-first service worker — every asset is vendored locally (see
 // vendor/), nothing comes from a CDN, so once cached the tool works with
 // zero internet.
-const CACHE_NAME = 'roll-call-v46';
+const CACHE_NAME = 'roll-call-v47';
 const PRECACHE_URLS = [
   './',
   './index.html',
   './app.js',
   './style.css',
   './manifest.json',
-  './roster-class1.js',
   './vendor/html5-qrcode.min.js',
   './vendor/xlsx.full.min.js',
   './icons/icon-192.png',

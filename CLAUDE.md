@@ -22,8 +22,11 @@ libraries.
 - `app.js` — all scan/roster/lock/export/splash logic
 - `style.css` — REC purple/lavender theme
 - `manifest.json` + `sw.js` — PWA installability + offline caching
-  (`CACHE_NAME` bump required on every asset change — currently `roll-call-v23`)
-- `roster-class1.js` — hardcoded Trial Class 1 roster (roll → name), 140 students
+  (`CACHE_NAME` bump required on every asset change — currently `roll-call-v47`)
+- ~~`roster-class1.js`~~ — **deleted 2026-10-13.** It was a public bundled
+  copy of Trial Class 1 (140 students' roll numbers + names, downloadable
+  without login). Trial Class 1 now comes only from Firestore via the
+  owner's login (see "Trial Class 1" below). It remains in git history.
 - `vendor/html5-qrcode.min.js`, `vendor/xlsx.full.min.js` — vendored, not CDN
 - `icons/` — app icons + splash logo (see Branding below)
 - `FIREBASE-ROSTER-PLAN.md` — agreed architecture for real per-staff roster
@@ -286,8 +289,8 @@ would have published 1,677 students' names/roll numbers and 22 staff emails.
 - **App:** `#classes-card` / `selectClass()` / `fetchClassesFromFirestore()`
   in `app.js`, `FIREBASE_CONFIG` set to project `rec-scan`. The old "Trial
   Class 1" rejection text is now `activeClassLabel`. If the class fetch
-  fails, the card shows the Firebase error code and the Trial Class 1
-  button still works. **Permanent offline cache (owner's requirement,
+  fails, the card shows the Firebase error code (there is no longer a
+  bundled Trial Class 1 fallback — see below). **Permanent offline cache (owner's requirement,
   2026-10-08):** after one sign-in the staff member's classes and student
   lists stay saved on the phone for good. Sign-out only ends the login (after a
   confirm) and keeps the classes, roster and selected class; the same account
@@ -365,6 +368,21 @@ Full detail in `FIREBASE-ROSTER-PLAN.md` in this folder. Summary:
   email is already the natural key for `staff/{email}` above). Still
   deferred: how rosters get uploaded into Firestore initially (CSV-paste
   admin tool vs. manual Firebase-console entry).
+
+## Trial Class 1 (decided 2026-10-13)
+
+Trial Class 1 is **only for the owner**
+(`ravisankar.mr.2024.cse@rajalakshmi.edu.in`, who is in `staffEmails` of
+`CB23F35__CSE_2024_Group_1`). Sign-in is mandatory, so it works only on
+that account; every other staff member sees only their own classes from
+Firestore. Because of that the public bundled copy was removed:
+`roster-class1.js`, its `<script>` tag, its service-worker precache entry,
+the hidden "Use Trial Class 1 roster" button and `loadTrialClass1Roster()`
+are all gone. The hidden `#roster-section` card stays only because the
+class picker reuses its clear-roster button and status line. A phone that
+already cached Trial Class 1 under the old build keeps that cached copy
+until a different class is picked or a different account signs in. The 140
+names are still in git history and in Firestore (private).
 
 ## Known limitation: proxy scans via screen images (discussed 2026-10-06, not fixed)
 

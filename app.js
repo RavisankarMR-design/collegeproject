@@ -147,7 +147,6 @@ const els = {
   rosterToggle: document.getElementById('roster-toggle'),
   rosterSection: document.getElementById('roster-section'),
   rosterClearBtn: document.getElementById('roster-clear-btn'),
-  trialRosterBtn: document.getElementById('trial-roster-btn'),
   rosterStatus: document.getElementById('roster-status'),
   absentCard: document.getElementById('absent-card'),
   absentList: document.getElementById('absent-list'),
@@ -684,25 +683,6 @@ function setRosterStatus(text, kind) {
   els.rosterStatus.className = `status show ${kind}`;
 }
 
-// Explicit opt-in only — loading this never happens automatically, so a
-// class that never taps this button behaves exactly as before (plain roll
-// numbers, no names, no absent tracking). Same guarantee as the paste-based
-// roster: nothing loads unless the teacher picks it for this class.
-function loadTrialClass1Roster() {
-  const data = window.TRIAL_CLASS1_ROSTER;
-  if (!data) { setRosterStatus('Trial Class 1 roster failed to load.', 'err'); return; }
-  roster.clear();
-  for (const [rollNo, name] of Object.entries(data)) roster.set(rollNo, name);
-  trialActive = true;
-  activeClassLabel = 'Trial Class 1';
-  saveRoster();
-  saveTrialActive();
-  els.rosterClearBtn.style.display = 'block';
-  setRosterStatus(`Loaded Trial Class 1 — ${roster.size} students. Only these roll numbers can be scanned.`, 'ok');
-  renderList();
-}
-
-els.trialRosterBtn.addEventListener('click', loadTrialClass1Roster);
 els.rosterClearBtn.addEventListener('click', async () => {
   const blockNote = trialActive ? ' (roll-number restriction lifted too — any roll can be scanned again)' : '';
   if (!(await askConfirm(`Clear the loaded roster (${roster.size} students)? Already-scanned entries stay, but names/absent-tracking go away${blockNote}.`))) return;

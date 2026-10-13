@@ -159,7 +159,7 @@ data-loading job, not a coding job.
   pattern-guessed from a roster name (`ravisankar.mr.2024.cse@…` for "Ravi
   Sankar M R"). Explicitly marked as a guess in its own code comment —
   `students/{rollNo}` above is what replaces it with real data.
-- `roster-class1.js` / the paste-a-roster flow — this is the mechanism
+- (removed 2026-10-13: bundled `roster-class1.js`; Trial Class 1 now only via the owner's login) the paste-a-roster flow — this is the mechanism
   Firestore data would feed into, unchanged.
 
 ## Build status (2026-10-08) — app side done, waiting on the Firebase project
