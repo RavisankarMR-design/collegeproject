@@ -22,7 +22,7 @@ libraries.
 - `app.js` — all scan/roster/lock/export/splash logic
 - `style.css` — REC purple/lavender theme
 - `manifest.json` + `sw.js` — PWA installability + offline caching
-  (`CACHE_NAME` bump required on every asset change — currently `roll-call-v47`)
+  (`CACHE_NAME` bump required on every asset change — currently `roll-call-v48`)
 - ~~`roster-class1.js`~~ — **deleted 2026-10-13.** It was a public bundled
   copy of Trial Class 1 (140 students' roll numbers + names, downloadable
   without login). Trial Class 1 now comes only from Firestore via the
@@ -386,6 +386,51 @@ class picker reuses its clear-roster button and status line. A phone that
 already cached Trial Class 1 under the old build keeps that cached copy
 until a different class is picked or a different account signs in. The 140
 names are still in git history and in Firestore (private).
+
+## Security review (2026-10-13)
+
+Reviewed with Cloudflare's `security-audit-skill` (cloned to
+`C:\Users\Admin\tools\security-audit-skill`, outside every project; run in its
+focused "guidance" mode, source + local dummy-account tests only, no live
+probing). Evidence bar: a finding needs a lower-trust principal, a crossed
+boundary and a concrete result.
+
+**Fixed in P3:**
+- **PIN lockout reset on reload (low).** `pinFails`/`pinBlockedUntil` were only
+  in memory, so reloading skipped the 30 s lockout (5 guesses per reload). Now
+  persisted in `localStorage` (`rollcall_pin_guard_v1`), cleared on a correct
+  PIN. Verified: lockout survives a reload and refuses even the right PIN
+  until it expires.
+- **Scans leaked between accounts (low).** Switching account wiped the class
+  cache and roster but not the scanned list, so the next staff member exported
+  the previous class's scans as PRESENT. Scans now carry an owner
+  (`rollcall_scan_owner_v1`); a different account signing in clears them. Same
+  account re-signing in (re-sync) keeps them; a list with no recorded owner is
+  adopted by whoever is signed in.
+
+**Open — needs the owner's decision (touches Project 1):**
+- **`data/class1-roster.json` is a live file on `main` of the public repo**
+  (140 students, names + roll numbers; raw URL returns 200 without login).
+  Removing P3's bundled copy did not make this private. P1's name-matching
+  export (commit `754ca2f`) reads it, so deleting it breaks that feature.
+  Names also stay in git history unless history is rewritten or the repo made
+  private (a private repo would turn off the free GitHub Pages site).
+
+**Needs an owner check (cannot be seen from source):**
+- Firebase console: Firestore Rules tab matches `firebase/firestore.rules`,
+  and only Google sign-in is enabled (anonymous off).
+- All GitHub Pages sites under `ravisankarmr-design.github.io` share one
+  origin and one `localStorage`; confirm this is the only Pages site, since any
+  other could read the cached student names, login email and PIN hash.
+- These docs name staff and internal faculty IDs; consider moving that detail
+  to private notes.
+
+**Checked, not a problem:** no secrets in any branch's history; student names
+are escaped before display and there is no `eval`; the export contains only
+digits, derived email text and constants (no formula injection); the Firebase
+`apiKey` is public by design (rules protect the data); SheetJS 0.18.5 has
+file-reading CVEs but P3 only writes files; the client-side sign-in gate is
+unverified by design — the server rules are the real boundary.
 
 ## Known limitation: proxy scans via screen images (discussed 2026-10-06, not fixed)
 

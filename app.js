@@ -726,8 +726,21 @@ const lockEls = {
   resetBtn: document.getElementById('reset-pin-btn'),
 };
 let pinMode = null; // 'set' | 'unlock'
+// Wrong-PIN count and lockout end are kept in localStorage, not just memory: otherwise a
+// page reload reset them and the 30-second lockout could be skipped for free.
+const PIN_GUARD_KEY = 'rollcall_pin_guard_v1';
 let pinFails = 0;
 let pinBlockedUntil = 0;
+try {
+  const g = JSON.parse(localStorage.getItem(PIN_GUARD_KEY));
+  if (g) { pinFails = Number(g.fails) || 0; pinBlockedUntil = Number(g.blockedUntil) || 0; }
+} catch { /* start clean */ }
+function savePinGuard() {
+  try {
+    if (pinFails || pinBlockedUntil) localStorage.setItem(PIN_GUARD_KEY, JSON.stringify({ fails: pinFails, blockedUntil: pinBlockedUntil }));
+    else localStorage.removeItem(PIN_GUARD_KEY);
+  } catch { /* not critical */ }
+}
 
 async function hashPin(pin) {
   if (!(window.crypto && crypto.subtle)) return 'p:' + pin; // insecure context: plain fallback
@@ -782,15 +795,18 @@ async function submitPin() {
     applyLock(true);
     return;
   }
-  if (Date.now() < pinBlockedUntil) { pinError('Too many wrong tries — wait a few seconds.'); return; }
+  if (Date.now() < pinBlockedUntil) { pinError(`Too many wrong tries — wait ${Math.ceil((pinBlockedUntil - Date.now()) / 1000)} seconds.`); return; }
   let stored = null;
   try { stored = localStorage.getItem(PIN_KEY); } catch { /* treated as no PIN below */ }
   if (!stored || (await hashPin(pin)) === stored) {
     pinFails = 0;
+    pinBlockedUntil = 0;
+    savePinGuard();
     applyLock(false);
     return;
   }
-  if (++pinFails >= 5) { pinFails = 0; pinBlockedUntil = Date.now() + 30000; pinError('Too many wrong tries — wait 30 seconds.'); return; }
+  if (++pinFails >= 5) { pinFails = 0; pinBlockedUntil = Date.now() + 30000; savePinGuard(); pinError('Too many wrong tries — wait 30 seconds.'); return; }
+  savePinGuard();
   pinError('Wrong PIN.');
 }
 lockEls.btn.addEventListener('click', () => {
@@ -1000,7 +1016,28 @@ function decodeJwt(token) {
   return JSON.parse(json);
 }
 
+// The scanned list belongs to the account that scanned it. Switching accounts on a shared
+// phone used to keep it, so the next staff member exported someone else's class as PRESENT.
+// A list with no recorded owner (made before this existed) is adopted by whoever is signed in.
+const SCAN_OWNER_KEY = 'rollcall_scan_owner_v1';
+function claimScansFor(email) {
+  let owner = null;
+  try { owner = localStorage.getItem(SCAN_OWNER_KEY); } catch { /* treated as unowned */ }
+  if (owner && owner !== email && (rows.length || dupeCount)) {
+    rows.length = 0;
+    seenRollNos.clear();
+    dupeCount = 0;
+    dupeLog.length = 0;
+    lastDecoded = { text: null, at: 0 };
+    saveState();
+    renderList();
+    setStatus('Scans left on this phone by another account were cleared.', 'info');
+  }
+  try { localStorage.setItem(SCAN_OWNER_KEY, email); } catch { /* not critical */ }
+}
+
 function showApp(user) {
+  claimScansFor(user.email);
   loginEls.screen.style.display = 'none';
   document.body.classList.remove('login-pending');
   loginEls.signedInAs.style.display = 'block';
