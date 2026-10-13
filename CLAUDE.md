@@ -452,6 +452,12 @@ class) as trial data.
 - **Expiry on phones:** the cached copy carries `trialUntil`; `dropExpiredTrial()`
   removes it when the app is opened after that date and clears the roster if it was
   the active class. `TRIAL_UNTIL` in `app.js` and the date in the rule must match.
+- **Staff-only sign-in (owner's rule, 2026-10-14):** the login gate itself now refuses
+  student-style addresses (`name.initials.YYYY.dept@`, i.e. a `.20YY.` segment before
+  the `@`); staff are plain `name@rajalakshmi.edu.in`. The owner's own account
+  (`OWNER_EMAIL` in `app.js`) is the one student-style address let in. A student
+  session saved before this rule is treated as signed out. Client-side and soft, like
+  the rest of the gate; the server rules are what actually protect the data.
 - **To switch off early:** delete the `allow get` block and publish the rules.
 - **Privacy note:** real student names + roll numbers reach every such staff phone.
   The student-style exclusion is a heuristic; none of the 22 real staff emails match

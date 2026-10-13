@@ -22,6 +22,12 @@ const SPLASH_MIN_MS = 600; // avoids a flash-then-instant-hide on a fast/cached 
 // added there too, or sign-in fails with an origin_mismatch error.
 const GOOGLE_CLIENT_ID = '194459417743-6idjf0kcccrql1k5i3t4mhdki540lkkb.apps.googleusercontent.com';
 const ALLOWED_EMAIL_DOMAIN = 'rajalakshmi.edu.in';
+// Sign-in is for staff only. Student addresses look like name.initials.YYYY.dept@college and
+// staff addresses are just name@college, so anything with a ".YYYY." batch segment before the @
+// is turned away. The owner's own account is the one student-style address let in.
+const OWNER_EMAIL = 'ravisankar.mr.2024.cse@rajalakshmi.edu.in';
+const looksLikeStudent = (email) => /[.]20[0-9][0-9][.]/.test(String(email).split('@')[0]);
+const accountAllowed = (email) => email === OWNER_EMAIL || !looksLikeStudent(email);
 const LOGIN_KEY = 'rollcall_user_v1';
 
 const READER_ID = 'reader';
@@ -1043,7 +1049,8 @@ function getCachedUser() {
     const raw = localStorage.getItem(LOGIN_KEY);
     if (!raw) return null;
     const u = JSON.parse(raw);
-    return u && typeof u.email === 'string' ? u : null;
+    // a student-style session saved before this rule existed must not stay signed in
+    return u && typeof u.email === 'string' && accountAllowed(u.email.toLowerCase()) ? u : null;
   } catch { return null; }
 }
 
@@ -1116,6 +1123,7 @@ function handleCredentialResponse(response) {
   const email = String(claims.email || '').toLowerCase();
   const domainOk = claims.hd === ALLOWED_EMAIL_DOMAIN || email.endsWith('@' + ALLOWED_EMAIL_DOMAIN);
   if (!domainOk) { loginError(`${claims.email || 'That account'} isn't a @${ALLOWED_EMAIL_DOMAIN} account.`); return; }
+  if (!accountAllowed(email)) { loginError(`${claims.email} looks like a student account. This app is for staff sign-in only.`); return; }
   const user = { email, name: claims.name || email, loginAt: new Date().toISOString() };
   let cachedFor = null;
   try { cachedFor = (JSON.parse(localStorage.getItem(CLASSES_KEY)) || {}).email; } catch { /* none */ }
