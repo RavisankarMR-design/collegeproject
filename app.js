@@ -52,7 +52,7 @@ const FIREBASE_SDK_VERSION = '13.0.0';
 // this one class so there is something to scan. Needs the matching "allow get" block in
 // firebase/firestore.rules. It stops being offered, and is dropped from phones, on TRIAL_UNTIL.
 const TRIAL_CLASS_ID = 'CB23F35__CSE_2024_Group_1';
-const TRIAL_UNTIL = '2026-10-16';
+const TRIAL_UNTIL = '2099-12-31'; // owner (2026-10-15): keep open until told to close; set a real date to expire it
 const pastDate = (isoDay) => new Date() >= new Date(isoDay + 'T00:00:00');
 // Roll numbers are always "24" + 7 digits (e.g. 240701424) — only the first
 // two digits are fixed, the other 7 vary per year/department/student.

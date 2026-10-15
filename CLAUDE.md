@@ -517,3 +517,5 @@ phone, and changes the whole "scan ID cards" model.
   doesn't replace it. Chosen mitigation: don't hand the phone to
   students at all (stand/hold it, let them just show the card), plus
   strict verbal instruction not to touch the screen.
+
+**Update (2026-10-15): trial class kept open indefinitely (owner's call; he will say when to close).** The rules published in the Firebase console have no end-date line (checked 2026-10-15); the repo rules file now matches that, and `TRIAL_UNTIL` in `app.js` is `2099-12-31`. To close it: delete the trial `allow get` block in the console and publish, then set `TRIAL_UNTIL` to a past date (or remove `withTrialClass`).
