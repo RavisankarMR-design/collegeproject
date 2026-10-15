@@ -519,3 +519,5 @@ phone, and changes the whole "scan ID cards" model.
   strict verbal instruction not to touch the screen.
 
 **Update (2026-10-15): trial class kept open indefinitely (owner's call; he will say when to close).** The rules published in the Firebase console have no end-date line (checked 2026-10-15); the repo rules file now matches that, and `TRIAL_UNTIL` in `app.js` is `2099-12-31`. To close it: delete the trial `allow get` block in the console and publish, then set `TRIAL_UNTIL` to a past date (or remove `withTrialClass`).
+
+**CLUB MODE (2026-10-15): this old copy is now the open scanner for club members / students.** Owner's decision: P3 moved to `REC-dev7/rec_scanner` (staff + class picker + Firebase + trial class). This repo's site (`ravisankarmr-design.github.io/collegeproject/`) is repurposed: any `@rajalakshmi.edu.in` account may sign in (no staff-only gate), no class picker, no trial class, no Firebase calls, no roster — scan roll numbers, export (Email id blank, Register id, PRESENT). Anything saved by an earlier staff version is cleared on load. Do not merge the two code lines.

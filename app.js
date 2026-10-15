@@ -27,7 +27,9 @@ const ALLOWED_EMAIL_DOMAIN = 'rajalakshmi.edu.in';
 // is turned away. The owner's own account is the one student-style address let in.
 const OWNER_EMAIL = 'ravisankar.mr.2024.cse@rajalakshmi.edu.in';
 const looksLikeStudent = (email) => /[.]20[0-9][0-9][.]/.test(String(email).split('@')[0]);
-const accountAllowed = (email) => email === OWNER_EMAIL || !looksLikeStudent(email);
+// CLUB MODE (this copy, owner 2026-10-15): club members and other students scan too, so any
+// @rajalakshmi.edu.in account may sign in. Staff-only gate + class picker live in REC-dev7/rec_scanner.
+const accountAllowed = () => true;
 const LOGIN_KEY = 'rollcall_user_v1';
 
 const READER_ID = 'reader';
@@ -1150,11 +1152,12 @@ function showApp(user) {
   loginEls.signedInAs.innerHTML = `Signed in as ${escapeHtml(user.email)} · <a href="#" id="sign-out-link">Sign out</a>`;
   document.getElementById('sign-out-link').addEventListener('click', async (e) => {
     e.preventDefault();
-    if (await askConfirm('Sign out? Your classes stay saved on this phone, but you need internet to sign in again.')) signOut();
+    if (await askConfirm('Sign out? Your scanned list stays on this phone, but you need internet to sign in again.')) signOut();
   });
-  dropExpiredTrial(user.email);
-  myClasses = cachedClassesFor(user.email);
-  renderClassList();
+  // club mode: no classes, no roster, no database. Anything saved by an earlier staff version is cleared,
+  // so a leftover roster can never restrict which roll numbers can be scanned.
+  wipeClassData();
+  classEls.card.style.display = 'none';
   // Ask the browser not to evict the saved classes when the phone runs low on
   // space (installed apps are usually granted this automatically).
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
@@ -1189,8 +1192,7 @@ function handleCredentialResponse(response) {
   try { cachedFor = (JSON.parse(localStorage.getItem(CLASSES_KEY)) || {}).email; } catch { /* none */ }
   if (cachedFor && cachedFor !== email) wipeClassData();
   try { localStorage.setItem(LOGIN_KEY, JSON.stringify(user)); } catch { /* still proceed for this session */ }
-  showApp(user);
-  syncClasses(response.credential, email);
+  showApp(user); // club mode: no class sync, Firebase is never loaded
 }
 window.handleCredentialResponse = handleCredentialResponse; // GIS calls this by name from its own script
 
